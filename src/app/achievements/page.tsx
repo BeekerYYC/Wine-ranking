@@ -3,12 +3,8 @@
 import { useEffect, useState } from "react";
 
 interface Achievement {
-  key: string;
-  name: string;
-  description: string;
-  icon: string;
-  unlocked: boolean;
-  unlockedAt: string | null;
+  key: string; name: string; description: string; icon: string;
+  unlocked: boolean; unlockedAt: string | null;
 }
 
 export default function AchievementsPage() {
@@ -16,63 +12,58 @@ export default function AchievementsPage() {
   const [newlyUnlocked, setNewlyUnlocked] = useState<string[]>([]);
 
   useEffect(() => {
-    fetch("/api/achievements")
-      .then((r) => r.json())
-      .then((data) => {
-        setAchievements(data.achievements);
-        setNewlyUnlocked(data.newAchievements.map((a: { key: string }) => a.key));
-      });
+    fetch("/api/achievements").then((r) => r.json()).then((data) => {
+      setAchievements(data.achievements);
+      setNewlyUnlocked(data.newAchievements.map((a: { key: string }) => a.key));
+    });
   }, []);
 
   const unlocked = achievements.filter((a) => a.unlocked);
   const locked = achievements.filter((a) => !a.unlocked);
+  const pct = achievements.length > 0 ? Math.round((unlocked.length / achievements.length) * 100) : 0;
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-wine-100 mb-2">Achievements</h1>
-      <p className="text-wine-400 text-sm mb-6">
-        {unlocked.length} of {achievements.length} badges unlocked
-      </p>
-
-      {/* Progress bar */}
-      <div className="bg-wine-900/60 rounded-full h-3 mb-6 overflow-hidden">
-        <div
-          className="bg-gradient-to-r from-wine-600 to-grape-500 h-full rounded-full transition-all duration-1000"
-          style={{ width: achievements.length > 0 ? `${(unlocked.length / achievements.length) * 100}%` : "0%" }}
-        />
+      <div className="flex items-end justify-between mb-5">
+        <div>
+          <h1 className="text-xl font-semibold">Badges</h1>
+          <p className="text-[13px] text-text-tertiary mt-1">{unlocked.length}/{achievements.length} unlocked</p>
+        </div>
+        <span className="text-[13px] text-accent font-semibold tabular-nums">{pct}%</span>
       </div>
 
-      {/* Newly unlocked */}
+      {/* Progress */}
+      <div className="bg-surface-overlay rounded-full h-1.5 mb-6 overflow-hidden">
+        <div className="bg-accent h-full rounded-full transition-all duration-1000 ease-out" style={{ width: `${pct}%` }} />
+      </div>
+
+      {/* New unlocks */}
       {newlyUnlocked.length > 0 && (
-        <div className="bg-gradient-to-r from-amber-900/40 to-wine-900/40 border border-amber-700/40 rounded-xl p-4 mb-6">
-          <h2 className="text-amber-300 font-semibold mb-2">🎉 New Badges Unlocked!</h2>
-          <div className="space-y-2">
-            {achievements.filter((a) => newlyUnlocked.includes(a.key)).map((a) => (
-              <div key={a.key} className="flex items-center gap-3">
-                <span className="text-3xl">{a.icon}</span>
-                <div>
-                  <p className="font-medium text-amber-200">{a.name}</p>
-                  <p className="text-sm text-amber-400">{a.description}</p>
-                </div>
+        <div className="bg-accent-muted border border-accent/20 rounded-xl p-4 mb-6">
+          <p className="text-[11px] text-accent uppercase tracking-widest font-medium mb-2">New badges unlocked</p>
+          {achievements.filter((a) => newlyUnlocked.includes(a.key)).map((a) => (
+            <div key={a.key} className="flex items-center gap-3 mt-2">
+              <span className="text-2xl">{a.icon}</span>
+              <div>
+                <p className="text-[14px] font-medium text-text-primary">{a.name}</p>
+                <p className="text-[12px] text-text-tertiary">{a.description}</p>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       )}
 
       {/* Unlocked */}
       {unlocked.length > 0 && (
         <div className="mb-6">
-          <h2 className="text-wine-300 font-semibold mb-3 text-sm uppercase tracking-wide">Unlocked</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <p className="text-[11px] text-text-tertiary uppercase tracking-widest font-medium mb-3">Unlocked</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {unlocked.map((a) => (
-              <div key={a.key} className="bg-wine-900/40 border border-wine-700/40 rounded-xl p-4 text-center hover:bg-wine-900/60 transition-colors">
-                <div className="text-4xl mb-2">{a.icon}</div>
-                <h3 className="font-semibold text-wine-100 text-sm">{a.name}</h3>
-                <p className="text-xs text-wine-400 mt-1">{a.description}</p>
-                {a.unlockedAt && (
-                  <p className="text-xs text-wine-600 mt-2">{new Date(a.unlockedAt).toLocaleDateString()}</p>
-                )}
+              <div key={a.key} className="bg-surface-raised rounded-xl border border-border p-4 text-center">
+                <div className="text-3xl mb-2">{a.icon}</div>
+                <h3 className="text-[13px] font-medium text-text-primary">{a.name}</h3>
+                <p className="text-[11px] text-text-tertiary mt-1">{a.description}</p>
+                {a.unlockedAt && <p className="text-[10px] text-text-tertiary mt-2 tabular-nums">{new Date(a.unlockedAt).toLocaleDateString()}</p>}
               </div>
             ))}
           </div>
@@ -82,13 +73,13 @@ export default function AchievementsPage() {
       {/* Locked */}
       {locked.length > 0 && (
         <div>
-          <h2 className="text-wine-500 font-semibold mb-3 text-sm uppercase tracking-wide">Locked</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <p className="text-[11px] text-text-tertiary uppercase tracking-widest font-medium mb-3">Locked</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {locked.map((a) => (
-              <div key={a.key} className="bg-wine-950/60 border border-wine-900/40 rounded-xl p-4 text-center opacity-50">
-                <div className="text-4xl mb-2 grayscale">🔒</div>
-                <h3 className="font-semibold text-wine-600 text-sm">{a.name}</h3>
-                <p className="text-xs text-wine-700 mt-1">{a.description}</p>
+              <div key={a.key} className="bg-surface rounded-xl border border-border-subtle p-4 text-center opacity-40">
+                <div className="text-2xl mb-2">&#128274;</div>
+                <h3 className="text-[13px] font-medium text-text-tertiary">{a.name}</h3>
+                <p className="text-[11px] text-text-tertiary mt-1">{a.description}</p>
               </div>
             ))}
           </div>

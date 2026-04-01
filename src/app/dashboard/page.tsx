@@ -7,74 +7,68 @@ import {
 } from "recharts";
 
 interface Stats {
-  total: number;
-  totalBottles: number;
-  inCollection: number;
-  consumed: number;
-  wishlist: number;
-  avgRating: number;
-  avgPrice: number;
-  totalSpent: number;
+  total: number; totalBottles: number; inCollection: number; consumed: number;
+  wishlist: number; avgRating: number; avgPrice: number; totalSpent: number;
   avgDaysBetween: number;
   varietalBreakdown: { name: string; count: number }[];
   colorBreakdown: { name: string; count: number }[];
   countryBreakdown: { name: string; count: number }[];
-  regionBreakdown: { name: string; count: number }[];
   priceRating: { name: string; price: number; rating: number }[];
   monthlyAdditions: { month: string; count: number }[];
   ratingDist: { rating: number; count: number }[];
   topWines: { id: number; name: string; rating: number; winery: string; vintage: number }[];
   bestValue: { id: number; name: string; rating: number; price: number; winery: string }[];
-  uniqueVarietals: number;
-  uniqueRegions: number;
-  uniqueCountries: number;
+  uniqueVarietals: number; uniqueRegions: number; uniqueCountries: number;
   wineOfDay: { id: number; name: string; winery: string; rating: number; imageData: string; color: string; vintage: number } | null;
   onThisDay: { id: number; name: string; winery: string; createdAt: string; rating: number }[];
 }
 
-const PIE_COLORS = ["#ab1d4a", "#8b5cf6", "#f59e0b", "#ec4899", "#06b6d4", "#f97316", "#10b981", "#6366f1"];
+const CHART_COLORS = ["#c084fc", "#f472b6", "#fbbf24", "#34d399", "#60a5fa", "#f97316", "#a78bfa", "#fb7185"];
 const COLOR_MAP: Record<string, string> = {
-  red: "#991b1b", white: "#fef3c7", "rosé": "#fbcfe8", sparkling: "#bae6fd", dessert: "#fcd34d", orange: "#fb923c",
+  red: "#ef4444", white: "#fef08a", "rosé": "#f9a8d4", sparkling: "#7dd3fc", dessert: "#fbbf24", orange: "#fb923c",
 };
+const tooltipStyle = { backgroundColor: "#1f1f23", border: "1px solid #2e2e33", borderRadius: "8px", color: "#fafaf9", fontSize: "12px" };
 
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
+  useEffect(() => { fetch("/api/stats").then((r) => r.json()).then(setStats); }, []);
 
-  useEffect(() => {
-    fetch("/api/stats").then((r) => r.json()).then(setStats);
-  }, []);
+  if (!stats) return <div className="text-center py-16 text-text-tertiary text-sm">Loading...</div>;
+  if (stats.total === 0) return (
+    <div className="text-center py-20">
+      <p className="text-4xl mb-4 opacity-30">&#128202;</p>
+      <h2 className="text-lg font-semibold mb-2">No data yet</h2>
+      <p className="text-sm text-text-tertiary mb-6">Add wines to see your dashboard</p>
+      <a href="/add" className="inline-block bg-accent/90 hover:bg-accent text-surface px-5 py-2.5 rounded-xl text-sm font-medium transition-colors">Add Wine</a>
+    </div>
+  );
 
-  if (!stats) return <div className="text-center py-12 text-wine-600">Loading dashboard...</div>;
-
-  if (stats.total === 0) {
-    return (
-      <div className="text-center py-16">
-        <div className="text-6xl mb-4">📊</div>
-        <h2 className="text-xl font-semibold text-wine-200 mb-2">No data yet</h2>
-        <p className="text-wine-500 mb-6">Add some wines to see your stats!</p>
-        <a href="/add" className="inline-block bg-wine-700 hover:bg-wine-600 text-white px-6 py-3 rounded-xl font-medium transition-colors">Add Your First Wine</a>
-      </div>
-    );
-  }
+  const Stat = ({ label, value, sub }: { label: string; value: string | number; sub?: string }) => (
+    <div className="bg-surface-raised rounded-xl border border-border p-4">
+      <p className="text-[11px] text-text-tertiary uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-xl font-semibold tabular-nums">{value}</p>
+      {sub && <p className="text-[11px] text-text-tertiary mt-0.5">{sub}</p>}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-wine-100">Dashboard</h1>
+      <h1 className="text-xl font-semibold">Dashboard</h1>
 
       {/* Wine of the Day */}
       {stats.wineOfDay && (
-        <a href={`/wine/${stats.wineOfDay.id}`} className="block bg-gradient-to-r from-wine-900 to-grape-900/50 border border-wine-700/40 rounded-xl p-4 hover:border-wine-600/60 transition-colors">
-          <p className="text-xs text-wine-400 uppercase tracking-wide mb-2">Wine of the Day</p>
-          <div className="flex items-center gap-4">
+        <a href={`/wine/${stats.wineOfDay.id}`} className="block bg-surface-raised rounded-xl border border-border p-4 hover:border-accent/20 transition-all">
+          <p className="text-[10px] text-accent uppercase tracking-widest font-medium mb-2">Wine of the day</p>
+          <div className="flex items-center gap-3">
             {stats.wineOfDay.imageData ? (
-              <img src={stats.wineOfDay.imageData} alt="" className="w-12 h-16 object-cover rounded-lg" />
+              <img src={stats.wineOfDay.imageData} alt="" className="w-10 h-14 object-cover rounded-lg" />
             ) : (
-              <div className="w-12 h-16 bg-wine-800/50 rounded-lg flex items-center justify-center text-xl">🍷</div>
+              <div className="w-10 h-14 bg-surface-overlay rounded-lg flex items-center justify-center text-lg opacity-40">&#127863;</div>
             )}
             <div>
-              <h3 className="font-semibold text-wine-100">{stats.wineOfDay.name} {stats.wineOfDay.vintage && `(${stats.wineOfDay.vintage})`}</h3>
-              {stats.wineOfDay.winery && <p className="text-sm text-wine-300">{stats.wineOfDay.winery}</p>}
-              {stats.wineOfDay.rating && <p className="text-sm text-amber-400">{"★".repeat(stats.wineOfDay.rating)}</p>}
+              <h3 className="font-medium text-[15px]">{stats.wineOfDay.name} {stats.wineOfDay.vintage && <span className="text-text-tertiary">({stats.wineOfDay.vintage})</span>}</h3>
+              {stats.wineOfDay.winery && <p className="text-[13px] text-text-secondary">{stats.wineOfDay.winery}</p>}
+              {stats.wineOfDay.rating > 0 && <p className="text-[12px] text-warm mt-0.5">{"★".repeat(stats.wineOfDay.rating)}</p>}
             </div>
           </div>
         </a>
@@ -82,182 +76,131 @@ export default function Dashboard() {
 
       {/* On This Day */}
       {stats.onThisDay.length > 0 && (
-        <div className="bg-wine-900/40 border border-wine-800/40 rounded-xl p-4">
-          <p className="text-xs text-wine-400 uppercase tracking-wide mb-2">On This Day</p>
+        <div className="bg-surface-raised rounded-xl border border-border p-4">
+          <p className="text-[10px] text-text-tertiary uppercase tracking-widest font-medium mb-2">On this day</p>
           {stats.onThisDay.map((w) => (
-            <a key={w.id} href={`/wine/${w.id}`} className="block text-sm text-wine-200 hover:text-wine-100">
-              {new Date(w.createdAt).getFullYear()}: {w.name} {w.rating ? `${"★".repeat(w.rating)}` : ""}
+            <a key={w.id} href={`/wine/${w.id}`} className="block text-[13px] text-text-secondary hover:text-text-primary transition-colors">
+              {new Date(w.createdAt).getFullYear()}: {w.name} {w.rating ? <span className="text-warm">{"★".repeat(w.rating)}</span> : ""}
             </a>
           ))}
         </div>
       )}
 
       {/* Key metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: "Total Wines", value: stats.total, icon: "🍷" },
-          { label: "Bottles in Cellar", value: stats.inCollection, icon: "📦" },
-          { label: "Avg Rating", value: `${stats.avgRating}/5`, icon: "⭐" },
-          { label: "Avg Price", value: `$${stats.avgPrice}`, icon: "💰" },
-          { label: "Total Spent", value: `$${stats.totalSpent.toLocaleString()}`, icon: "💸" },
-          { label: "Consumed", value: stats.consumed, icon: "✅" },
-          { label: "Wishlist", value: stats.wishlist, icon: "📝" },
-          { label: "New Wine Every", value: stats.avgDaysBetween > 0 ? `${stats.avgDaysBetween}d` : "—", icon: "⏱️" },
-        ].map((m) => (
-          <div key={m.label} className="bg-wine-900/40 border border-wine-800/40 rounded-xl p-4 text-center">
-            <div className="text-2xl mb-1">{m.icon}</div>
-            <div className="text-lg font-bold text-wine-100">{m.value}</div>
-            <div className="text-xs text-wine-500">{m.label}</div>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <Stat label="Total wines" value={stats.total} />
+        <Stat label="In cellar" value={`${stats.inCollection} btl`} />
+        <Stat label="Avg rating" value={`${stats.avgRating}`} sub="out of 5" />
+        <Stat label="Avg price" value={`$${stats.avgPrice}`} />
+        <Stat label="Total spent" value={`$${stats.totalSpent.toLocaleString()}`} />
+        <Stat label="Consumed" value={stats.consumed} />
+        <Stat label="Wishlist" value={stats.wishlist} />
+        <Stat label="Pace" value={stats.avgDaysBetween > 0 ? `${stats.avgDaysBetween}d` : "—"} sub="between bottles" />
       </div>
 
-      {/* Discovery Score */}
-      <div className="bg-gradient-to-r from-grape-900/40 to-wine-900/40 border border-grape-800/40 rounded-xl p-4">
-        <h2 className="font-semibold text-grape-200 mb-3">Discovery Score</h2>
+      {/* Discovery */}
+      <div className="bg-surface-raised rounded-xl border border-border p-4">
+        <p className="text-[10px] text-accent uppercase tracking-widest font-medium mb-3">Discovery score</p>
         <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <div className="text-2xl font-bold text-grape-300">{stats.uniqueVarietals}</div>
-            <div className="text-xs text-grape-500">Varietals</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-grape-300">{stats.uniqueRegions}</div>
-            <div className="text-xs text-grape-500">Regions</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-grape-300">{stats.uniqueCountries}</div>
-            <div className="text-xs text-grape-500">Countries</div>
-          </div>
+          <div><p className="text-2xl font-semibold text-accent tabular-nums">{stats.uniqueVarietals}</p><p className="text-[11px] text-text-tertiary">Varietals</p></div>
+          <div><p className="text-2xl font-semibold text-accent tabular-nums">{stats.uniqueRegions}</p><p className="text-[11px] text-text-tertiary">Regions</p></div>
+          <div><p className="text-2xl font-semibold text-accent tabular-nums">{stats.uniqueCountries}</p><p className="text-[11px] text-text-tertiary">Countries</p></div>
         </div>
       </div>
 
-      {/* Top Wines */}
-      {stats.topWines.length > 0 && (
-        <div className="bg-wine-900/40 border border-wine-800/40 rounded-xl p-4">
-          <h2 className="font-semibold text-wine-200 mb-3">Your Top Wines</h2>
-          <div className="space-y-2">
-            {stats.topWines.map((w, i) => (
-              <a key={w.id} href={`/wine/${w.id}`} className="flex items-center gap-3 text-sm hover:bg-wine-800/30 rounded-lg p-2 -mx-2 transition-colors">
-                <span className="w-6 text-wine-500 font-medium">#{i + 1}</span>
-                <span className="flex-1 text-wine-200 truncate">{w.name} {w.vintage ? `(${w.vintage})` : ""}</span>
-                <span className="text-amber-400">{"★".repeat(w.rating || 0)}</span>
+      {/* Top Wines & Best Value side by side */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {stats.topWines.length > 0 && (
+          <div className="bg-surface-raised rounded-xl border border-border p-4">
+            <p className="text-[10px] text-text-tertiary uppercase tracking-widest font-medium mb-3">Top rated</p>
+            {stats.topWines.slice(0, 5).map((w, i) => (
+              <a key={w.id} href={`/wine/${w.id}`} className="flex items-center gap-2 py-1.5 text-[13px] hover:bg-surface-overlay -mx-2 px-2 rounded-lg transition-colors">
+                <span className="text-text-tertiary w-4 tabular-nums">{i + 1}</span>
+                <span className="flex-1 text-text-secondary truncate">{w.name}</span>
+                <span className="text-warm text-[12px]">{"★".repeat(w.rating || 0)}</span>
               </a>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Best Value */}
-      {stats.bestValue.length > 0 && (
-        <div className="bg-wine-900/40 border border-wine-800/40 rounded-xl p-4">
-          <h2 className="font-semibold text-wine-200 mb-3">Best Value Wines</h2>
-          <div className="space-y-2">
+        )}
+        {stats.bestValue.length > 0 && (
+          <div className="bg-surface-raised rounded-xl border border-border p-4">
+            <p className="text-[10px] text-text-tertiary uppercase tracking-widest font-medium mb-3">Best value</p>
             {stats.bestValue.map((w) => (
-              <a key={w.id} href={`/wine/${w.id}`} className="flex items-center gap-3 text-sm hover:bg-wine-800/30 rounded-lg p-2 -mx-2 transition-colors">
-                <span className="flex-1 text-wine-200 truncate">{w.name}</span>
-                <span className="text-amber-400">{"★".repeat(w.rating || 0)}</span>
-                <span className="text-wine-400">${w.price}</span>
+              <a key={w.id} href={`/wine/${w.id}`} className="flex items-center gap-2 py-1.5 text-[13px] hover:bg-surface-overlay -mx-2 px-2 rounded-lg transition-colors">
+                <span className="flex-1 text-text-secondary truncate">{w.name}</span>
+                <span className="text-warm text-[12px]">{"★".repeat(w.rating || 0)}</span>
+                <span className="text-text-tertiary tabular-nums">${w.price}</span>
               </a>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        {/* Color breakdown */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {stats.colorBreakdown.length > 0 && (
-          <div className="bg-wine-900/40 border border-wine-800/40 rounded-xl p-4">
-            <h2 className="font-semibold text-wine-200 mb-3">By Color</h2>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={stats.colorBreakdown} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }) => `${name} (${value})`} labelLine={false}>
-                  {stats.colorBreakdown.map((entry) => (
-                    <Cell key={entry.name} fill={COLOR_MAP[entry.name] || "#6b7280"} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: "#4a0c22", border: "1px solid #722040", borderRadius: "8px", color: "#fdf2f4" }} />
-              </PieChart>
+          <div className="bg-surface-raised rounded-xl border border-border p-4">
+            <p className="text-[10px] text-text-tertiary uppercase tracking-widest font-medium mb-3">By color</p>
+            <ResponsiveContainer width="100%" height={180}>
+              <PieChart><Pie data={stats.colorBreakdown} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={70} strokeWidth={0} label={({ name, value }) => `${name} ${value}`} labelLine={false}>
+                {stats.colorBreakdown.map((e) => <Cell key={e.name} fill={COLOR_MAP[e.name] || "#6b7280"} />)}
+              </Pie><Tooltip contentStyle={tooltipStyle} /></PieChart>
             </ResponsiveContainer>
           </div>
         )}
-
-        {/* Varietal breakdown */}
         {stats.varietalBreakdown.length > 0 && (
-          <div className="bg-wine-900/40 border border-wine-800/40 rounded-xl p-4">
-            <h2 className="font-semibold text-wine-200 mb-3">Top Varietals</h2>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={stats.varietalBreakdown.slice(0, 6)} layout="vertical">
-                <XAxis type="number" hide />
-                <YAxis type="category" dataKey="name" width={100} tick={{ fill: "#f4a9bc", fontSize: 12 }} />
-                <Tooltip contentStyle={{ backgroundColor: "#4a0c22", border: "1px solid #722040", borderRadius: "8px", color: "#fdf2f4" }} />
-                <Bar dataKey="count" fill="#ab1d4a" radius={[0, 4, 4, 0]} />
+          <div className="bg-surface-raised rounded-xl border border-border p-4">
+            <p className="text-[10px] text-text-tertiary uppercase tracking-widest font-medium mb-3">Top varietals</p>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={stats.varietalBreakdown.slice(0, 5)} layout="vertical">
+                <XAxis type="number" hide /><YAxis type="category" dataKey="name" width={90} tick={{ fill: "#a8a29e", fontSize: 11 }} />
+                <Tooltip contentStyle={tooltipStyle} /><Bar dataKey="count" fill="#c084fc" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         )}
-
-        {/* Rating distribution */}
         {stats.ratingDist.some((r) => r.count > 0) && (
-          <div className="bg-wine-900/40 border border-wine-800/40 rounded-xl p-4">
-            <h2 className="font-semibold text-wine-200 mb-3">Rating Distribution</h2>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={stats.ratingDist}>
-                <XAxis dataKey="rating" tick={{ fill: "#f4a9bc", fontSize: 12 }} tickFormatter={(v) => `${v}★`} />
-                <YAxis hide />
-                <Tooltip contentStyle={{ backgroundColor: "#4a0c22", border: "1px solid #722040", borderRadius: "8px", color: "#fdf2f4" }} />
-                <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-              </BarChart>
+          <div className="bg-surface-raised rounded-xl border border-border p-4">
+            <p className="text-[10px] text-text-tertiary uppercase tracking-widest font-medium mb-3">Ratings</p>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={stats.ratingDist}><XAxis dataKey="rating" tick={{ fill: "#a8a29e", fontSize: 11 }} tickFormatter={(v) => `${v}★`} /><YAxis hide />
+                <Tooltip contentStyle={tooltipStyle} /><Bar dataKey="count" fill="#fbbf24" radius={[4, 4, 0, 0]} /></BarChart>
             </ResponsiveContainer>
           </div>
         )}
-
-        {/* Country breakdown */}
         {stats.countryBreakdown.length > 0 && (
-          <div className="bg-wine-900/40 border border-wine-800/40 rounded-xl p-4">
-            <h2 className="font-semibold text-wine-200 mb-3">By Country</h2>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={stats.countryBreakdown.slice(0, 8)} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }) => `${name} (${value})`} labelLine={false}>
-                  {stats.countryBreakdown.slice(0, 8).map((_, i) => (
-                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: "#4a0c22", border: "1px solid #722040", borderRadius: "8px", color: "#fdf2f4" }} />
-              </PieChart>
+          <div className="bg-surface-raised rounded-xl border border-border p-4">
+            <p className="text-[10px] text-text-tertiary uppercase tracking-widest font-medium mb-3">By country</p>
+            <ResponsiveContainer width="100%" height={180}>
+              <PieChart><Pie data={stats.countryBreakdown.slice(0, 8)} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={70} strokeWidth={0} label={({ name, value }) => `${name} ${value}`} labelLine={false}>
+                {stats.countryBreakdown.slice(0, 8).map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+              </Pie><Tooltip contentStyle={tooltipStyle} /></PieChart>
             </ResponsiveContainer>
           </div>
         )}
       </div>
 
-      {/* Price vs Rating scatter */}
+      {/* Price vs Rating */}
       {stats.priceRating.length > 0 && (
-        <div className="bg-wine-900/40 border border-wine-800/40 rounded-xl p-4">
-          <h2 className="font-semibold text-wine-200 mb-3">Price vs Rating</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <ScatterChart>
-              <CartesianGrid strokeDasharray="3 3" stroke="#722040" />
-              <XAxis dataKey="price" name="Price" unit="$" tick={{ fill: "#f4a9bc", fontSize: 12 }} />
-              <YAxis dataKey="rating" name="Rating" domain={[0, 5]} tick={{ fill: "#f4a9bc", fontSize: 12 }} />
-              <Tooltip contentStyle={{ backgroundColor: "#4a0c22", border: "1px solid #722040", borderRadius: "8px", color: "#fdf2f4" }} cursor={{ strokeDasharray: "3 3" }} />
-              <Scatter data={stats.priceRating} fill="#ec7696" />
-            </ScatterChart>
+        <div className="bg-surface-raised rounded-xl border border-border p-4">
+          <p className="text-[10px] text-text-tertiary uppercase tracking-widest font-medium mb-3">Price vs rating</p>
+          <ResponsiveContainer width="100%" height={260}>
+            <ScatterChart><CartesianGrid strokeDasharray="3 3" stroke="#2e2e33" />
+              <XAxis dataKey="price" name="Price" unit="$" tick={{ fill: "#a8a29e", fontSize: 11 }} />
+              <YAxis dataKey="rating" name="Rating" domain={[0, 5]} tick={{ fill: "#a8a29e", fontSize: 11 }} />
+              <Tooltip contentStyle={tooltipStyle} cursor={{ strokeDasharray: "3 3" }} /><Scatter data={stats.priceRating} fill="#c084fc" /></ScatterChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      {/* Monthly additions trend */}
+      {/* Monthly trend */}
       {stats.monthlyAdditions.length > 1 && (
-        <div className="bg-wine-900/40 border border-wine-800/40 rounded-xl p-4">
-          <h2 className="font-semibold text-wine-200 mb-3">Monthly Additions</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={stats.monthlyAdditions}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#722040" />
-              <XAxis dataKey="month" tick={{ fill: "#f4a9bc", fontSize: 11 }} />
-              <YAxis hide />
-              <Tooltip contentStyle={{ backgroundColor: "#4a0c22", border: "1px solid #722040", borderRadius: "8px", color: "#fdf2f4" }} />
-              <Line type="monotone" dataKey="count" stroke="#ab1d4a" strokeWidth={2} dot={{ fill: "#ec7696" }} />
-            </LineChart>
+        <div className="bg-surface-raised rounded-xl border border-border p-4">
+          <p className="text-[10px] text-text-tertiary uppercase tracking-widest font-medium mb-3">Monthly additions</p>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={stats.monthlyAdditions}><CartesianGrid strokeDasharray="3 3" stroke="#2e2e33" />
+              <XAxis dataKey="month" tick={{ fill: "#a8a29e", fontSize: 10 }} /><YAxis hide />
+              <Tooltip contentStyle={tooltipStyle} /><Line type="monotone" dataKey="count" stroke="#c084fc" strokeWidth={2} dot={{ fill: "#c084fc", r: 3 }} /></LineChart>
           </ResponsiveContainer>
         </div>
       )}

@@ -24,7 +24,7 @@ interface Wine {
 const colors = ["red", "white", "rosé", "sparkling", "dessert", "orange"];
 const statuses = [
   { key: "", label: "All" },
-  { key: "collection", label: "In Cellar" },
+  { key: "collection", label: "Cellar" },
   { key: "wishlist", label: "Wishlist" },
   { key: "consumed", label: "Consumed" },
   { key: "restaurant", label: "Restaurant" },
@@ -43,19 +43,15 @@ export default function Home() {
     if (search) params.set("search", search);
     if (colorFilter) params.set("color", colorFilter);
     if (statusFilter) params.set("status", statusFilter);
-    if (sort === "rating") {
-      params.set("sort", "rating");
-      params.set("order", "desc");
-    } else if (sort === "price") {
-      params.set("sort", "price");
-      params.set("order", "asc");
-    } else if (sort === "name") {
-      params.set("sort", "name");
-      params.set("order", "asc");
-    } else {
-      params.set("sort", "createdAt");
-      params.set("order", "desc");
-    }
+    const sortMap: Record<string, [string, string]> = {
+      rating: ["rating", "desc"],
+      price: ["price", "asc"],
+      name: ["name", "asc"],
+      createdAt: ["createdAt", "desc"],
+    };
+    const [s, o] = sortMap[sort] || sortMap.createdAt;
+    params.set("sort", s);
+    params.set("order", o);
 
     setLoading(true);
     fetch(`/api/wines?${params}`)
@@ -75,113 +71,91 @@ export default function Home() {
     setWines((prev) => prev.map((w) => (w.id === id ? { ...w, rating } : w)));
   };
 
+  const pill = (active: boolean) =>
+    `px-3 py-1 rounded-full text-[13px] font-medium whitespace-nowrap transition-all ${
+      active
+        ? "bg-accent/15 text-accent ring-1 ring-accent/25"
+        : "text-text-tertiary hover:text-text-secondary hover:bg-surface-overlay"
+    }`;
+
   return (
     <div>
       {/* Search */}
-      <input
-        type="text"
-        placeholder="Search wines, wineries, varietals..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-full px-4 py-3 rounded-xl border border-wine-800/50 bg-wine-900/50 text-stone-100 placeholder-wine-600 focus:outline-none focus:ring-2 focus:ring-wine-500 focus:border-transparent mb-4"
-      />
+      <div className="relative mb-5">
+        <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          placeholder="Search wines, wineries, regions..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface-raised border border-border text-[14px] text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/30 transition-all"
+        />
+      </div>
 
-      {/* Status filter */}
-      <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
+      {/* Filters */}
+      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 scrollbar-none">
         {statuses.map((s) => (
-          <button
-            key={s.key}
-            onClick={() => setStatusFilter(s.key)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-              statusFilter === s.key
-                ? "bg-wine-700 text-white"
-                : "bg-wine-900/50 text-wine-400 hover:bg-wine-800/60 border border-wine-800/40"
-            }`}
-          >
+          <button key={s.key} onClick={() => setStatusFilter(s.key)} className={pill(statusFilter === s.key)}>
             {s.label}
           </button>
         ))}
       </div>
-
-      {/* Color filter */}
-      <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
-        <button
-          onClick={() => setColorFilter("")}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-            !colorFilter
-              ? "bg-wine-700 text-white"
-              : "bg-wine-900/50 text-wine-400 hover:bg-wine-800/60 border border-wine-800/40"
-          }`}
-        >
-          All Colors
-        </button>
+      <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1 scrollbar-none">
+        <button onClick={() => setColorFilter("")} className={pill(!colorFilter)}>All colors</button>
         {colors.map((c) => (
-          <button
-            key={c}
-            onClick={() => setColorFilter(colorFilter === c ? "" : c)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap capitalize transition-colors ${
-              colorFilter === c
-                ? "bg-wine-700 text-white"
-                : "bg-wine-900/50 text-wine-400 hover:bg-wine-800/60 border border-wine-800/40"
-            }`}
-          >
+          <button key={c} onClick={() => setColorFilter(colorFilter === c ? "" : c)} className={`${pill(colorFilter === c)} capitalize`}>
             {c}
           </button>
         ))}
       </div>
 
-      {/* Sort */}
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-sm text-wine-500">Sort:</span>
-        {[
-          { key: "createdAt", label: "Recent" },
-          { key: "rating", label: "Top Rated" },
-          { key: "price", label: "Price" },
-          { key: "name", label: "Name" },
-        ].map((s) => (
-          <button
-            key={s.key}
-            onClick={() => setSort(s.key)}
-            className={`text-sm px-2 py-1 rounded transition-colors ${
-              sort === s.key
-                ? "bg-wine-800 text-wine-200 font-medium"
-                : "text-wine-500 hover:text-wine-300"
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-        <div className="flex-1" />
-        <a
-          href="/api/export"
-          className="text-xs text-wine-500 hover:text-wine-300 transition-colors"
-          download
-        >
+      {/* Sort row */}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-1">
+          <span className="text-[12px] text-text-tertiary mr-1">Sort</span>
+          {[
+            { key: "createdAt", label: "Recent" },
+            { key: "rating", label: "Rating" },
+            { key: "price", label: "Price" },
+            { key: "name", label: "Name" },
+          ].map((s) => (
+            <button
+              key={s.key}
+              onClick={() => setSort(s.key)}
+              className={`text-[12px] px-2 py-0.5 rounded-md transition-all ${
+                sort === s.key
+                  ? "bg-surface-overlay text-text-primary font-medium"
+                  : "text-text-tertiary hover:text-text-secondary"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <a href="/api/export" download className="text-[12px] text-text-tertiary hover:text-accent transition-colors">
           Export CSV
         </a>
       </div>
 
       {/* Wine list */}
       {loading ? (
-        <div className="text-center py-12 text-wine-600">Loading...</div>
+        <div className="text-center py-16 text-text-tertiary text-sm">Loading...</div>
       ) : wines.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="text-6xl mb-4">🍷</div>
-          <h2 className="text-xl font-semibold text-wine-200 mb-2">
-            No wines yet
-          </h2>
-          <p className="text-wine-500 mb-6">
-            Start building your collection by adding your first wine.
-          </p>
+        <div className="text-center py-20">
+          <p className="text-5xl mb-5 opacity-30">&#127863;</p>
+          <h2 className="text-lg font-semibold text-text-primary mb-2">Your collection is empty</h2>
+          <p className="text-sm text-text-tertiary mb-6">Add your first wine to get started</p>
           <a
             href="/add"
-            className="inline-block bg-wine-700 hover:bg-wine-600 text-white px-6 py-3 rounded-xl font-medium transition-colors"
+            className="inline-block bg-accent/90 hover:bg-accent text-surface px-5 py-2.5 rounded-xl text-sm font-medium transition-colors"
           >
-            Add Your First Wine
+            Add Wine
           </a>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {wines.map((wine) => (
             <WineCard key={wine.id} wine={wine} onQuickRate={handleQuickRate} />
           ))}

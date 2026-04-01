@@ -1,9 +1,13 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Wine Ranker",
   description: "Track and rank your wine collection",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#18181b",
 };
 
 const navLinks = [
@@ -20,39 +24,40 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-wine-950 text-stone-100 min-h-screen">
-        {/* Top nav */}
-        <nav className="bg-wine-950/95 backdrop-blur-md border-b border-wine-800/50 px-4 py-3 sticky top-0 z-50">
-          <div className="max-w-3xl mx-auto flex items-center justify-between">
-            <a href="/" className="text-xl font-bold tracking-tight text-wine-300 hover:text-wine-200 transition-colors">
-              Wine Ranker
-            </a>
-            <a
-              href="/add"
-              className="bg-wine-700 hover:bg-wine-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-wine-900/50"
-            >
-              + Add Wine
-            </a>
-          </div>
-        </nav>
-
-        {/* Sub nav */}
-        <div className="bg-wine-900/50 border-b border-wine-800/30 px-4 overflow-x-auto">
-          <div className="max-w-3xl mx-auto flex gap-1">
-            {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="px-4 py-2.5 text-sm font-medium text-wine-300 hover:text-white hover:bg-wine-800/50 rounded-t-lg transition-colors whitespace-nowrap"
-              >
-                {link.label}
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+      </head>
+      <body className="bg-surface text-text-primary min-h-screen font-sans">
+        <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-border">
+          <div className="max-w-3xl mx-auto px-5">
+            <div className="flex items-center justify-between h-14">
+              <a href="/" className="text-lg font-semibold tracking-tight text-text-primary">
+                Wine Ranker
               </a>
-            ))}
+              <a
+                href="/add"
+                className="bg-accent/90 hover:bg-accent text-surface px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
+              >
+                Add Wine
+              </a>
+            </div>
+            <nav className="flex gap-1 -mb-px overflow-x-auto">
+              {navLinks.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="px-3 py-2 text-[13px] font-medium text-text-tertiary hover:text-text-primary border-b-2 border-transparent hover:border-accent/40 transition-all whitespace-nowrap"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
           </div>
-        </div>
-
-        <main className="max-w-3xl mx-auto px-4 py-6">{children}</main>
+        </header>
+        <main className="max-w-3xl mx-auto px-5 py-8">{children}</main>
       </body>
     </html>
   );

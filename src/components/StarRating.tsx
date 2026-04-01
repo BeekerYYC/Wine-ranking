@@ -11,7 +11,7 @@ export default function StarRating({
   readonly?: boolean;
   size?: "sm" | "md" | "lg";
 }) {
-  const sizeClass = size === "sm" ? "text-lg" : size === "lg" ? "text-3xl" : "text-2xl";
+  const sizeClass = size === "sm" ? "text-sm" : size === "lg" ? "text-xl" : "text-base";
   return (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((star) => (
@@ -24,9 +24,9 @@ export default function StarRating({
             e.stopPropagation();
             onChange?.(star === rating ? 0 : star);
           }}
-          className={`${sizeClass} transition-all ${
+          className={`${sizeClass} transition-all leading-none ${
             readonly ? "cursor-default" : "cursor-pointer hover:scale-110"
-          } ${star <= rating ? "text-amber-400" : "text-wine-800"}`}
+          } ${star <= rating ? "text-warm" : "text-border"}`}
         >
           ★
         </button>

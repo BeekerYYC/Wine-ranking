@@ -1,124 +1,91 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
+interface Message { role: "user" | "assistant"; content: string; }
 
 const quickActions = [
-  { type: "recommend", label: "What should I open tonight?", icon: "🍷" },
-  { type: "pairing", label: "Food pairing help", icon: "🍽️" },
-  { type: "insights", label: "Analyze my taste", icon: "📊" },
+  { type: "recommend", label: "What should I open tonight?", sub: "Get a recommendation from your cellar" },
+  { type: "pairing", label: "Food pairing help", sub: "Find the right wine for your meal" },
+  { type: "insights", label: "Analyze my palate", sub: "Discover your taste patterns" },
 ];
 
 export default function SommelierPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const send = async (message: string, type?: string) => {
     if (!message.trim() && !type) return;
-
     const userMsg = message || quickActions.find((a) => a.type === type)?.label || "";
     setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
     setInput("");
     setLoading(true);
-
     try {
-      const res = await fetch("/api/sommelier", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, type }),
-      });
-
+      const res = await fetch("/api/sommelier", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message, type }) });
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
-
-      setMessages((prev) => [...prev, { role: "assistant", content: data.response }]);
-    } catch (e) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Sorry, I encountered an error: ${e instanceof Error ? e.message : "Unknown error"}` },
-      ]);
-    } finally {
-      setLoading(false);
-    }
+      setMessages((prev) => [...prev, { role: "assistant", content: data.error ? `Error: ${data.error}` : data.response }]);
+    } catch {
+      setMessages((prev) => [...prev, { role: "assistant", content: "Something went wrong. Please try again." }]);
+    } finally { setLoading(false); }
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)]">
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-wine-100">AI Sommelier</h1>
-        <p className="text-sm text-wine-400">Your personal wine expert, powered by AI with knowledge of your collection</p>
+    <div className="flex flex-col" style={{ height: "calc(100vh - 160px)" }}>
+      <div className="mb-5">
+        <h1 className="text-xl font-semibold">Sommelier</h1>
+        <p className="text-[13px] text-text-tertiary mt-1">AI wine expert with knowledge of your collection</p>
       </div>
 
-      {/* Quick actions */}
       {messages.length === 0 && (
-        <div className="space-y-3 mb-6">
-          <p className="text-sm text-wine-500">Quick actions:</p>
-          {quickActions.map((action) => (
-            <button
-              key={action.type}
-              onClick={() => send("", action.type)}
-              className="w-full text-left bg-wine-900/40 border border-wine-800/40 rounded-xl p-4 hover:border-wine-700/60 hover:bg-wine-900/60 transition-all flex items-center gap-3"
-            >
-              <span className="text-2xl">{action.icon}</span>
-              <span className="text-wine-200 font-medium">{action.label}</span>
+        <div className="space-y-2 mb-6">
+          {quickActions.map((a) => (
+            <button key={a.type} onClick={() => send("", a.type)}
+              className="w-full text-left bg-surface-raised rounded-xl border border-border p-4 hover:border-accent/20 transition-all group">
+              <p className="text-[14px] text-text-primary font-medium group-hover:text-accent transition-colors">{a.label}</p>
+              <p className="text-[12px] text-text-tertiary mt-0.5">{a.sub}</p>
             </button>
           ))}
         </div>
       )}
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-4 mb-4">
+      <div className="flex-1 overflow-y-auto space-y-3 mb-4">
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div
-              className={`max-w-[85%] rounded-xl px-4 py-3 ${
-                msg.role === "user"
-                  ? "bg-wine-700 text-white"
-                  : "bg-wine-900/60 border border-wine-800/40 text-wine-100"
-              }`}
-            >
-              <div className="text-sm whitespace-pre-wrap leading-relaxed" dangerouslySetInnerHTML={{
-                __html: msg.content
-                  .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-                  .replace(/\n/g, "<br/>")
+            <div className={`max-w-[85%] rounded-xl px-4 py-2.5 ${
+              msg.role === "user"
+                ? "bg-accent/15 text-text-primary"
+                : "bg-surface-raised border border-border text-text-secondary"
+            }`}>
+              <div className="text-[13px] leading-relaxed whitespace-pre-wrap" dangerouslySetInnerHTML={{
+                __html: msg.content.replace(/\*\*(.*?)\*\*/g, "<strong class='text-text-primary'>$1</strong>").replace(/\n/g, "<br/>")
               }} />
             </div>
           </div>
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-wine-900/60 border border-wine-800/40 rounded-xl px-4 py-3">
-              <div className="flex gap-1">
-                <div className="w-2 h-2 rounded-full bg-wine-400 animate-bounce [animation-delay:0ms]" />
-                <div className="w-2 h-2 rounded-full bg-wine-400 animate-bounce [animation-delay:150ms]" />
-                <div className="w-2 h-2 rounded-full bg-wine-400 animate-bounce [animation-delay:300ms]" />
+            <div className="bg-surface-raised border border-border rounded-xl px-4 py-3">
+              <div className="flex gap-1.5">
+                {[0, 150, 300].map((d) => <div key={d} className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce" style={{ animationDelay: `${d}ms` }} />)}
               </div>
             </div>
           </div>
         )}
+        <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
       <div className="flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
+        <input type="text" value={input} onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !loading && send(input)}
-          placeholder="Ask me anything about wine..."
-          className="flex-1 px-4 py-3 rounded-xl border border-wine-800/50 bg-wine-900/50 text-stone-100 placeholder-wine-600 focus:outline-none focus:ring-2 focus:ring-wine-500"
-          disabled={loading}
-        />
-        <button
-          onClick={() => send(input)}
-          disabled={loading || !input.trim()}
-          className="bg-wine-700 hover:bg-wine-600 disabled:bg-wine-900 disabled:text-wine-700 text-white px-5 py-3 rounded-xl font-medium transition-colors"
-        >
+          placeholder="Ask about wine..."
+          className="flex-1 px-4 py-2.5 rounded-xl bg-surface-raised border border-border text-[14px] text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent/30 transition-all"
+          disabled={loading} />
+        <button onClick={() => send(input)} disabled={loading || !input.trim()}
+          className="bg-accent/90 hover:bg-accent disabled:opacity-30 text-surface px-4 py-2.5 rounded-xl text-[13px] font-medium transition-all">
           Send
         </button>
       </div>

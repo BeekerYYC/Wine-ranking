@@ -50,14 +50,14 @@ export default function CameraCapture({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="w-full border-2 border-dashed border-wine-700/50 rounded-xl p-8 text-center hover:border-wine-500 hover:bg-wine-900/40 transition-colors cursor-pointer"
+        className="w-full border border-dashed border-border rounded-xl p-10 text-center hover:border-accent/40 hover:bg-accent-muted transition-all cursor-pointer group"
       >
-        <div className="text-4xl mb-2">📸</div>
-        <p className="text-wine-200 font-medium">
-          Take photo of wine label
+        <div className="text-3xl mb-3 opacity-50 group-hover:opacity-80 transition-opacity">&#128247;</div>
+        <p className="text-text-primary font-medium text-[15px]">
+          Capture wine label
         </p>
-        <p className="text-sm text-wine-500 mt-1">
-          or tap to choose from gallery
+        <p className="text-sm text-text-tertiary mt-1">
+          Take a photo or choose from gallery
         </p>
       </button>
     </div>
