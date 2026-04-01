@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 const nav = [
   {
     href: "/",
-    label: "Collection",
+    label: "All Wines",
     icon: (
       <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -128,10 +128,10 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      {/* Mobile bottom bar */}
+      {/* Mobile bottom bar — only 4 key items + Add */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur-xl border-t border-border z-50 safe-area-bottom">
         <div className="flex items-center justify-around h-14">
-          {nav.map((item) => {
+          {nav.filter((item) => ["/", "/fridge", "/dashboard", "/sommelier"].includes(item.href)).map((item) => {
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             return (
               <a

@@ -10,7 +10,7 @@ export async function GET() {
   const headers = [
     "Name", "Winery", "Vintage", "Varietal", "Region", "Country",
     "Color", "Price", "Rating", "Quantity", "Status", "Store",
-    "List", "Occasion", "Notes", "Description", "Date Added",
+    "List", "Occasion", "Notes", "Description", "Date Added", "Date Consumed",
   ];
 
   const rows = wines.map((w) => [
@@ -31,6 +31,7 @@ export async function GET() {
     (w.notes || "").replace(/"/g, '""'),
     (w.description || "").replace(/"/g, '""'),
     new Date(w.createdAt).toLocaleDateString(),
+    w.consumedAt ? new Date(w.consumedAt).toLocaleDateString() : "",
   ]);
 
   const csv = [

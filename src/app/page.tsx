@@ -93,9 +93,9 @@ export default function Home() {
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Collection</h1>
+            <h1 className="text-2xl font-bold tracking-tight">All Wines</h1>
             <p className="text-[13px] text-text-tertiary mt-0.5">
-              {stats ? `${stats.total} wines · ${stats.inCollection} bottles in cellar` : "Loading..."}
+              {stats ? `${stats.total} wines · ${stats.totalBottles} bottles total` : "Loading..."}
             </p>
           </div>
         </div>

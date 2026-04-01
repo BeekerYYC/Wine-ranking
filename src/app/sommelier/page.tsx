@@ -5,7 +5,8 @@ import { useState, useRef, useEffect } from "react";
 interface Message { role: "user" | "assistant"; content: string; }
 
 const quickActions = [
-  { type: "recommend", label: "What should I open tonight?", sub: "Get a recommendation from your cellar", icon: "🍷" },
+  { type: "link", href: "/fridge/drink", label: "What should I drink?", sub: "Get an AI pick from your fridge based on mood or food", icon: "🧊" },
+  { type: "recommend", label: "General wine recommendation", sub: "Get a recommendation from your full collection", icon: "🍷" },
   { type: "pairing", label: "Food pairing help", sub: "Find the right wine for your meal", icon: "🍽" },
   { type: "insights", label: "Analyze my palate", sub: "Discover your taste patterns", icon: "✨" },
 ];
@@ -43,6 +44,16 @@ export default function SommelierPage() {
       {messages.length === 0 && (
         <div className="space-y-2 mb-6">
           {quickActions.map((a) => (
+            a.type === "link" ? (
+            <a key={a.type} href={a.href}
+              className="w-full text-left bg-surface-raised rounded-xl border border-border-subtle p-4 hover:border-border transition-all group flex items-center gap-3.5">
+              <span className="text-xl opacity-50 group-hover:opacity-80 transition-opacity">{a.icon}</span>
+              <div>
+                <p className="text-[13px] text-text-primary font-medium group-hover:text-gold transition-colors">{a.label}</p>
+                <p className="text-[11px] text-text-muted mt-0.5">{a.sub}</p>
+              </div>
+            </a>
+            ) : (
             <button key={a.type} onClick={() => send("", a.type)}
               className="w-full text-left bg-surface-raised rounded-xl border border-border-subtle p-4 hover:border-border transition-all group flex items-center gap-3.5">
               <span className="text-xl opacity-50 group-hover:opacity-80 transition-opacity">{a.icon}</span>
@@ -51,6 +62,7 @@ export default function SommelierPage() {
                 <p className="text-[11px] text-text-muted mt-0.5">{a.sub}</p>
               </div>
             </button>
+            )
           ))}
         </div>
       )}
