@@ -117,12 +117,13 @@ Return ONLY a valid JSON array, no markdown code blocks or other text.`,
         },
       });
     } else {
-      // Multiple bottles from one photo — update first, create additional
+      // Multiple bottles from one photo — clear image (drawer photo is not useful per-bottle)
       const [first, ...rest] = bottles;
       await prisma.scanItem.update({
         where: { id: pendingItem.id },
         data: {
           status: "analyzed",
+          imageData: null, // don't save drawer photo as individual wine image
           name: first.name || null,
           winery: first.winery || null,
           vintage: first.vintage ? parseInt(first.vintage) : null,
@@ -143,7 +144,7 @@ Return ONLY a valid JSON array, no markdown code blocks or other text.`,
           data: rest.map((b: Record<string, unknown>) => ({
             batchId: id,
             sourceIndex: pendingItem.sourceIndex,
-            imageData: pendingItem.imageData, // same source photo
+            imageData: null, // don't save drawer photo as individual wine image
             status: "analyzed",
             name: (b.name as string) || null,
             winery: (b.winery as string) || null,

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ConsumeModal from "@/components/ConsumeModal";
+import WineBottlePlaceholder from "@/components/WineBottlePlaceholder";
 
 interface Wine {
   id: number; name: string; winery?: string | null; vintage?: number | null;
@@ -42,6 +43,12 @@ export default function FridgePage() {
       body: JSON.stringify(data),
     });
     setConsumeWine(null);
+    fetchWines();
+  };
+
+  const handleRemove = async (wineId: number) => {
+    if (!confirm("Remove this wine from your fridge?")) return;
+    await fetch(`/api/wines/${wineId}`, { method: "DELETE" });
     fetchWines();
   };
 
@@ -159,11 +166,8 @@ export default function FridgePage() {
                   {wine.imageData ? (
                     <img src={wine.imageData} alt={wine.name} className="w-full h-24 object-contain rounded-lg mb-2" />
                   ) : (
-                    <div className="w-full h-24 bg-surface-overlay rounded-lg mb-2 flex items-center justify-center">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="text-text-muted">
-                        <path d="M8 2h8l-1 9H9L8 2z" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M12 11v6" strokeLinecap="round" /><path d="M8 21h8" strokeLinecap="round" /><path d="M10 17h4" strokeLinecap="round" />
-                      </svg>
+                    <div className="mb-2">
+                      <WineBottlePlaceholder color={wine.color} size="lg" name={wine.name} />
                     </div>
                   )}
                   <h3 className="text-[12px] font-semibold text-text-primary truncate">{wine.name}</h3>
@@ -175,17 +179,28 @@ export default function FridgePage() {
                     {wine.quantity > 1 && <span className="text-[10px] text-text-tertiary tabular-nums bg-surface-overlay px-1 rounded">×{wine.quantity}</span>}
                   </div>
                 </a>
-                {/* Quick consume button */}
-                <button
-                  onClick={() => setConsumeWine(wine)}
-                  className="absolute top-2 right-2 w-6 h-6 rounded-full bg-bg/70 backdrop-blur-sm flex items-center justify-center text-text-muted hover:text-gold opacity-0 group-hover:opacity-100 transition-all"
-                  title="Open a bottle"
-                >
-                  <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path d="M8 2h8l-1 9H9L8 2z" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M12 11v6" strokeLinecap="round" /><path d="M8 21h8" strokeLinecap="round" />
-                  </svg>
-                </button>
+                {/* Quick actions on hover */}
+                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                  <button
+                    onClick={(e) => { e.preventDefault(); setConsumeWine(wine); }}
+                    className="w-6 h-6 rounded-full bg-bg/70 backdrop-blur-sm flex items-center justify-center text-text-muted hover:text-gold transition-colors"
+                    title="Open a bottle"
+                  >
+                    <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path d="M8 2h8l-1 9H9L8 2z" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M12 11v6" strokeLinecap="round" /><path d="M8 21h8" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={(e) => { e.preventDefault(); handleRemove(wine.id); }}
+                    className="w-6 h-6 rounded-full bg-bg/70 backdrop-blur-sm flex items-center justify-center text-text-muted hover:text-danger transition-colors"
+                    title="Remove wine"
+                  >
+                    <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             ))}
           </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import StarRating from "./StarRating";
+import WineBottlePlaceholder from "./WineBottlePlaceholder";
 
 const colorDot: Record<string, string> = {
   red: "bg-wine-red",
@@ -46,13 +47,8 @@ export default function WineCard({
             className="w-12 h-16 object-cover rounded-lg flex-shrink-0"
           />
         ) : (
-          <div className="w-12 h-16 bg-surface-overlay rounded-lg flex-shrink-0 flex items-center justify-center">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="text-text-muted">
-              <path d="M8 2h8l-1 9H9L8 2z" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M12 11v6" strokeLinecap="round" />
-              <path d="M8 21h8" strokeLinecap="round" />
-              <path d="M10 17h4" strokeLinecap="round" />
-            </svg>
+          <div className="flex-shrink-0">
+            <WineBottlePlaceholder color={wine.color} size="sm" />
           </div>
         )}
 

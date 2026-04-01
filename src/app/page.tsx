@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import WineCard from "@/components/WineCard";
+import WineBottlePlaceholder from "@/components/WineBottlePlaceholder";
 
 interface Wine {
   id: number;
@@ -278,13 +279,8 @@ export default function Home() {
               {wine.imageData ? (
                 <img src={wine.imageData} alt={wine.name} className="w-full h-28 object-contain rounded-lg mb-2" />
               ) : (
-                <div className="w-full h-28 bg-surface-overlay rounded-lg mb-2 flex items-center justify-center">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="text-text-muted">
-                    <path d="M8 2h8l-1 9H9L8 2z" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M12 11v6" strokeLinecap="round" />
-                    <path d="M8 21h8" strokeLinecap="round" />
-                    <path d="M10 17h4" strokeLinecap="round" />
-                  </svg>
+                <div className="mb-2">
+                  <WineBottlePlaceholder color={wine.color} size="lg" name={wine.name} />
                 </div>
               )}
               <h3 className="text-[12px] font-semibold text-text-primary truncate">{wine.name}</h3>
