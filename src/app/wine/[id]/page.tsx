@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import StarRating from "@/components/StarRating";
+import ConsumeModal from "@/components/ConsumeModal";
 
 interface Wine {
   id: number; name: string; winery?: string | null; vintage?: number | null;
@@ -11,6 +12,7 @@ interface Wine {
   notes?: string | null; description?: string | null; imageData?: string | null;
   quantity: number; status: string; occasion?: string | null;
   foodPairings?: string | null; onlineRating?: number | null;
+  consumedAt?: string | null;
   store?: { id: number; name: string } | null;
   list?: { id: number; name: string } | null; createdAt: string;
 }
@@ -30,6 +32,7 @@ export default function WineDetail() {
   const [notes, setNotes] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [showConsume, setShowConsume] = useState(false);
 
   useEffect(() => {
     fetch(`/api/wines/${id}`).then((r) => r.json()).then((w) => {
@@ -57,6 +60,21 @@ export default function WineDetail() {
     if (!wine) return;
     await fetch(`/api/wines/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
     setWine({ ...wine, status });
+  };
+
+  const handleConsume = async (data: { rating?: number; notes?: string }) => {
+    if (!wine) return;
+    const res = await fetch(`/api/wines/${id}/consume`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const updated = await res.json();
+    setWine(updated);
+    setQuantity(updated.quantity);
+    if (data.rating) setRating(data.rating);
+    if (data.notes) setNotes(data.notes);
+    setShowConsume(false);
   };
 
   const handleDelete = async () => {
@@ -143,6 +161,12 @@ export default function WineDetail() {
         </div>
         {wine.store && <p className="text-[11px] text-text-muted mt-3">Purchased at <span className="text-text-tertiary">{wine.store.name}</span></p>}
         {wine.list && <p className="text-[11px] text-text-muted mt-1">List: <span className="text-text-tertiary">{wine.list.name}</span></p>}
+        {wine.consumedAt && <p className="text-[11px] text-text-muted mt-2">Consumed {new Date(wine.consumedAt).toLocaleDateString()}</p>}
+        {quantity > 0 && wine.status === "collection" && (
+          <button onClick={() => setShowConsume(true)} className="mt-3 w-full bg-gold-muted hover:bg-gold/20 text-gold border border-gold/15 py-2 rounded-lg text-[12px] font-semibold transition-all">
+            Open a bottle
+          </button>
+        )}
       </section>
 
       {/* Rating */}
@@ -192,6 +216,10 @@ export default function WineDetail() {
         <p className="text-[11px] text-text-muted">Added {new Date(wine.createdAt).toLocaleDateString()}</p>
         <button onClick={handleDelete} className="text-danger/50 hover:text-danger text-[12px] font-medium transition-colors">Delete wine</button>
       </div>
+
+      {showConsume && wine && (
+        <ConsumeModal wine={wine} onConfirm={handleConsume} onClose={() => setShowConsume(false)} />
+      )}
     </div>
   );
 }

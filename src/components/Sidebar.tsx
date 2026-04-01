@@ -13,6 +13,15 @@ const nav = [
     ),
   },
   {
+    href: "/fridge",
+    label: "Fridge",
+    icon: (
+      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 3h16v18H4V3zm0 9h16M9 3v9m0 0v9" />
+      </svg>
+    ),
+  },
+  {
     href: "/dashboard",
     label: "Dashboard",
     icon: (
@@ -86,7 +95,7 @@ export default function Sidebar() {
         {/* Nav */}
         <nav className="flex-1 px-3 py-2 space-y-0.5">
           {nav.map((item) => {
-            const active = pathname === item.href;
+            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             return (
               <a
                 key={item.href}
@@ -123,7 +132,7 @@ export default function Sidebar() {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur-xl border-t border-border z-50 safe-area-bottom">
         <div className="flex items-center justify-around h-14">
           {nav.map((item) => {
-            const active = pathname === item.href;
+            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             return (
               <a
                 key={item.href}

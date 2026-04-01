@@ -31,8 +31,42 @@ model Wine {
   store         Store?   @relation(fields: [storeId], references: [id])
   listId        Int?
   list          WineList? @relation(fields: [listId], references: [id])
+  consumedAt    DateTime? // when marked consumed
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model ScanBatch {
+  id          Int         @id @default(autoincrement())
+  status      String      @default("processing") // processing, reviewing, completed
+  totalPhotos Int         @default(0)
+  processed   Int         @default(0)
+  items       ScanItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model ScanItem {
+  id           Int        @id @default(autoincrement())
+  batchId      Int
+  batch        ScanBatch  @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  imageData    String?
+  sourceIndex  Int        @default(0) // which photo in the batch this came from
+  status       String     @default("pending") // pending, analyzed, confirmed, rejected
+  name         String?
+  winery       String?
+  vintage      Int?
+  varietal     String?
+  region       String?
+  country      String?
+  color        String?
+  description  String?
+  foodPairings String?
+  onlineRating Float?
+  confidence   Float?
+  wineId       Int?       // set when confirmed and saved as Wine
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
 
 model Store {
