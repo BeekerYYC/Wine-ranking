@@ -2,28 +2,64 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --color-surface: #18181b;
-  --color-surface-raised: #1f1f23;
-  --color-surface-overlay: #27272a;
-  --color-border: #2e2e33;
-  --color-border-subtle: #252529;
-  --color-text-primary: #fafaf9;
-  --color-text-secondary: #a8a29e;
-  --color-text-tertiary: #78716c;
-  --color-accent: #c084fc;
-  --color-accent-muted: rgba(192, 132, 252, 0.15);
-  --color-warm: #fbbf24;
-  --color-warm-muted: rgba(251, 191, 36, 0.12);
+
+  /* Premium wine cellar palette */
+  --color-bg: #0c0c0e;
+  --color-surface: #141416;
+  --color-surface-raised: #1a1a1e;
+  --color-surface-overlay: #222226;
+  --color-surface-highlight: #2a2a2f;
+
+  --color-border: #2a2a30;
+  --color-border-subtle: #1f1f24;
+  --color-border-accent: rgba(201, 169, 98, 0.2);
+
+  --color-text-primary: #f5f0e8;
+  --color-text-secondary: #a09a8f;
+  --color-text-tertiary: #6b665e;
+  --color-text-muted: #4a4640;
+
+  --color-gold: #c9a962;
+  --color-gold-light: #e4c87e;
+  --color-gold-muted: rgba(201, 169, 98, 0.12);
+  --color-gold-subtle: rgba(201, 169, 98, 0.06);
+
+  --color-wine-red: #c75050;
+  --color-wine-white: #e8dca0;
+  --color-wine-rose: #d4849a;
+  --color-wine-sparkling: #7abed4;
+  --color-wine-dessert: #d4a44e;
+  --color-wine-orange: #d48a4e;
+
+  --color-danger: #c75050;
+  --color-danger-muted: rgba(199, 80, 80, 0.12);
+  --color-success: #5a9e6f;
+  --color-success-muted: rgba(90, 158, 111, 0.12);
 }
 
 body {
+  background: var(--color-bg);
   font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.011em;
 }
 
-/* Smooth scrollbar */
-::-webkit-scrollbar { width: 6px; }
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #52525b; }
+::-webkit-scrollbar-thumb { background: #2a2a30; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a40; }
+
+/* Remove number input spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] { -moz-appearance: textfield; }
+
+/* Selection */
+::selection {
+  background: rgba(201, 169, 98, 0.3);
+  color: #f5f0e8;
+}

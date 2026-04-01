@@ -3,12 +3,12 @@
 import StarRating from "./StarRating";
 
 const colorDot: Record<string, string> = {
-  red: "bg-red-500",
-  white: "bg-yellow-300",
-  "rosé": "bg-pink-400",
-  sparkling: "bg-sky-400",
-  dessert: "bg-amber-500",
-  orange: "bg-orange-400",
+  red: "bg-wine-red",
+  white: "bg-wine-white",
+  "rosé": "bg-wine-rose",
+  sparkling: "bg-wine-sparkling",
+  dessert: "bg-wine-dessert",
+  orange: "bg-wine-orange",
 };
 
 interface Wine {
@@ -36,74 +36,88 @@ export default function WineCard({
   onQuickRate?: (id: number, rating: number) => void;
 }) {
   return (
-    <div className="group bg-surface-raised rounded-xl border border-border hover:border-accent/20 transition-all duration-200">
-      <a href={`/wine/${wine.id}`} className="flex gap-4 p-4">
+    <div className="group relative bg-surface-raised hover:bg-surface-overlay rounded-xl border border-border-subtle hover:border-border transition-all duration-200">
+      <a href={`/wine/${wine.id}`} className="flex gap-3.5 p-3.5">
+        {/* Image */}
         {wine.imageData ? (
           <img
             src={wine.imageData}
             alt={wine.name}
-            className="w-14 h-[72px] object-cover rounded-lg flex-shrink-0"
+            className="w-12 h-16 object-cover rounded-lg flex-shrink-0"
           />
         ) : (
-          <div className="w-14 h-[72px] bg-surface-overlay rounded-lg flex-shrink-0 flex items-center justify-center text-text-tertiary text-xl">
-            &#127863;
+          <div className="w-12 h-16 bg-surface-overlay rounded-lg flex-shrink-0 flex items-center justify-center">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="text-text-muted">
+              <path d="M8 2h8l-1 9H9L8 2z" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M12 11v6" strokeLinecap="round" />
+              <path d="M8 21h8" strokeLinecap="round" />
+              <path d="M10 17h4" strokeLinecap="round" />
+            </svg>
           </div>
         )}
+
+        {/* Info */}
         <div className="flex-1 min-w-0 py-0.5">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="font-semibold text-[15px] text-text-primary truncate leading-snug">
+              <h3 className="font-semibold text-[14px] text-text-primary truncate leading-tight">
                 {wine.name}
               </h3>
-              {wine.winery && (
-                <p className="text-[13px] text-text-secondary truncate mt-0.5">{wine.winery}</p>
-              )}
+              <div className="flex items-center gap-1.5 mt-1">
+                {wine.winery && (
+                  <span className="text-[12px] text-text-secondary truncate">{wine.winery}</span>
+                )}
+                {wine.vintage && (
+                  <span className="text-[12px] text-text-tertiary tabular-nums">· {wine.vintage}</span>
+                )}
+              </div>
             </div>
-            <div className="flex flex-col items-end flex-shrink-0 gap-1">
-              {wine.vintage && (
-                <span className="text-[13px] text-text-tertiary tabular-nums">{wine.vintage}</span>
-              )}
-              {wine.price != null && (
-                <span className="text-[13px] font-medium text-text-secondary tabular-nums">
-                  ${wine.price.toFixed(0)}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 mt-2">
-            {wine.color && (
-              <span className={`w-2.5 h-2.5 rounded-full ${colorDot[wine.color] || "bg-zinc-500"}`} title={wine.color} />
-            )}
-            {wine.varietal && (
-              <span className="text-xs text-text-tertiary">{wine.varietal}</span>
-            )}
-            {wine.region && (
-              <span className="text-xs text-text-tertiary opacity-60">· {wine.region}</span>
-            )}
-            {wine.status && wine.status !== "collection" && (
-              <span className="text-[10px] uppercase tracking-wider text-accent font-medium ml-auto">{wine.status}</span>
-            )}
-            {(wine.quantity ?? 0) > 1 && (
-              <span className="text-[10px] tabular-nums text-text-tertiary bg-surface-overlay rounded px-1.5 py-0.5 ml-auto">
-                ×{wine.quantity}
+            {wine.price != null && (
+              <span className="text-[13px] font-semibold text-text-secondary tabular-nums flex-shrink-0">
+                ${wine.price.toFixed(0)}
               </span>
             )}
           </div>
+
+          {/* Bottom row */}
           <div className="flex items-center justify-between mt-2">
-            {wine.rating ? (
-              <StarRating rating={wine.rating} readonly size="sm" />
-            ) : (
-              <span className="text-xs text-text-tertiary">Unrated</span>
-            )}
-            {wine.onlineRating && (
-              <span className="text-[11px] text-accent font-medium tabular-nums">{wine.onlineRating}pts</span>
-            )}
+            <div className="flex items-center gap-2">
+              {wine.color && (
+                <span className={`w-2 h-2 rounded-full ${colorDot[wine.color] || "bg-surface-highlight"}`} title={wine.color} />
+              )}
+              {wine.varietal && (
+                <span className="text-[11px] text-text-tertiary">{wine.varietal}</span>
+              )}
+              {wine.status && wine.status !== "collection" && (
+                <span className="text-[10px] uppercase tracking-wider text-gold font-medium bg-gold-muted px-1.5 py-0.5 rounded">
+                  {wine.status}
+                </span>
+              )}
+              {(wine.quantity ?? 0) > 1 && (
+                <span className="text-[10px] tabular-nums text-text-tertiary bg-surface-overlay rounded px-1.5 py-0.5">
+                  ×{wine.quantity}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {wine.onlineRating && (
+                <span className="text-[11px] text-gold font-semibold tabular-nums">{wine.onlineRating}</span>
+              )}
+              {wine.rating ? (
+                <StarRating rating={wine.rating} readonly size="sm" />
+              ) : (
+                <span className="text-[11px] text-text-muted">No rating</span>
+              )}
+            </div>
           </div>
         </div>
       </a>
+
+      {/* Quick rate strip */}
       {onQuickRate && (
-        <div className="border-t border-border px-4 py-2 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
-          <span className="text-[11px] text-text-tertiary">Quick rate</span>
+        <div className="border-t border-border-subtle px-3.5 py-1.5 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+          <span className="text-[11px] text-text-muted">Quick rate</span>
           <StarRating
             rating={wine.rating || 0}
             size="sm"

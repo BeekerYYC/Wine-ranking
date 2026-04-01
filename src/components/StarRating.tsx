@@ -26,7 +26,7 @@ export default function StarRating({
           }}
           className={`${sizeClass} transition-all leading-none ${
             readonly ? "cursor-default" : "cursor-pointer hover:scale-110"
-          } ${star <= rating ? "text-warm" : "text-border"}`}
+          } ${star <= rating ? "text-gold" : "text-surface-highlight"}`}
         >
           ★
         </button>

@@ -50,13 +50,18 @@ export default function CameraCapture({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="w-full border border-dashed border-border rounded-xl p-10 text-center hover:border-accent/40 hover:bg-accent-muted transition-all cursor-pointer group"
+        className="w-full border border-dashed border-border hover:border-gold/40 rounded-xl p-8 text-center hover:bg-gold-subtle transition-all cursor-pointer group"
       >
-        <div className="text-3xl mb-3 opacity-50 group-hover:opacity-80 transition-opacity">&#128247;</div>
-        <p className="text-text-primary font-medium text-[15px]">
+        <div className="w-12 h-12 rounded-full bg-gold-muted flex items-center justify-center mx-auto mb-3 group-hover:bg-gold/20 transition-colors">
+          <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} className="text-gold">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+          </svg>
+        </div>
+        <p className="text-text-primary font-medium text-[14px]">
           Capture wine label
         </p>
-        <p className="text-sm text-text-tertiary mt-1">
+        <p className="text-[12px] text-text-tertiary mt-1">
           Take a photo or choose from gallery
         </p>
       </button>

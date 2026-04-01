@@ -5,9 +5,9 @@ import { useState, useRef, useEffect } from "react";
 interface Message { role: "user" | "assistant"; content: string; }
 
 const quickActions = [
-  { type: "recommend", label: "What should I open tonight?", sub: "Get a recommendation from your cellar" },
-  { type: "pairing", label: "Food pairing help", sub: "Find the right wine for your meal" },
-  { type: "insights", label: "Analyze my palate", sub: "Discover your taste patterns" },
+  { type: "recommend", label: "What should I open tonight?", sub: "Get a recommendation from your cellar", icon: "🍷" },
+  { type: "pairing", label: "Food pairing help", sub: "Find the right wine for your meal", icon: "🍽" },
+  { type: "insights", label: "Analyze my palate", sub: "Discover your taste patterns", icon: "✨" },
 ];
 
 export default function SommelierPage() {
@@ -34,19 +34,22 @@ export default function SommelierPage() {
   };
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 160px)" }}>
+    <div className="flex flex-col" style={{ height: "calc(100vh - 120px)" }}>
       <div className="mb-5">
-        <h1 className="text-xl font-semibold">Sommelier</h1>
-        <p className="text-[13px] text-text-tertiary mt-1">AI wine expert with knowledge of your collection</p>
+        <h1 className="text-2xl font-bold tracking-tight">Sommelier</h1>
+        <p className="text-[13px] text-text-tertiary mt-0.5">AI wine expert with knowledge of your collection</p>
       </div>
 
       {messages.length === 0 && (
         <div className="space-y-2 mb-6">
           {quickActions.map((a) => (
             <button key={a.type} onClick={() => send("", a.type)}
-              className="w-full text-left bg-surface-raised rounded-xl border border-border p-4 hover:border-accent/20 transition-all group">
-              <p className="text-[14px] text-text-primary font-medium group-hover:text-accent transition-colors">{a.label}</p>
-              <p className="text-[12px] text-text-tertiary mt-0.5">{a.sub}</p>
+              className="w-full text-left bg-surface-raised rounded-xl border border-border-subtle p-4 hover:border-border transition-all group flex items-center gap-3.5">
+              <span className="text-xl opacity-50 group-hover:opacity-80 transition-opacity">{a.icon}</span>
+              <div>
+                <p className="text-[13px] text-text-primary font-medium group-hover:text-gold transition-colors">{a.label}</p>
+                <p className="text-[11px] text-text-muted mt-0.5">{a.sub}</p>
+              </div>
             </button>
           ))}
         </div>
@@ -57,8 +60,8 @@ export default function SommelierPage() {
           <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[85%] rounded-xl px-4 py-2.5 ${
               msg.role === "user"
-                ? "bg-accent/15 text-text-primary"
-                : "bg-surface-raised border border-border text-text-secondary"
+                ? "bg-gold-muted text-text-primary border border-gold/10"
+                : "bg-surface-raised border border-border-subtle text-text-secondary"
             }`}>
               <div className="text-[13px] leading-relaxed whitespace-pre-wrap" dangerouslySetInnerHTML={{
                 __html: msg.content.replace(/\*\*(.*?)\*\*/g, "<strong class='text-text-primary'>$1</strong>").replace(/\n/g, "<br/>")
@@ -68,9 +71,9 @@ export default function SommelierPage() {
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-surface-raised border border-border rounded-xl px-4 py-3">
+            <div className="bg-surface-raised border border-border-subtle rounded-xl px-4 py-3">
               <div className="flex gap-1.5">
-                {[0, 150, 300].map((d) => <div key={d} className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce" style={{ animationDelay: `${d}ms` }} />)}
+                {[0, 150, 300].map((d) => <div key={d} className="w-1.5 h-1.5 rounded-full bg-gold/40 animate-bounce" style={{ animationDelay: `${d}ms` }} />)}
               </div>
             </div>
           </div>
@@ -82,10 +85,10 @@ export default function SommelierPage() {
         <input type="text" value={input} onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !loading && send(input)}
           placeholder="Ask about wine..."
-          className="flex-1 px-4 py-2.5 rounded-xl bg-surface-raised border border-border text-[14px] text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent/30 transition-all"
+          className="flex-1 px-3.5 py-2.5 rounded-lg bg-surface-raised border border-border-subtle text-[13px] text-text-primary placeholder-text-muted focus:outline-none focus:border-gold/30 focus:ring-1 focus:ring-gold/20 transition-all"
           disabled={loading} />
         <button onClick={() => send(input)} disabled={loading || !input.trim()}
-          className="bg-accent/90 hover:bg-accent disabled:opacity-30 text-surface px-4 py-2.5 rounded-xl text-[13px] font-medium transition-all">
+          className="bg-gold/90 hover:bg-gold disabled:opacity-30 text-bg px-4 py-2.5 rounded-lg text-[12px] font-semibold transition-all">
           Send
         </button>
       </div>
