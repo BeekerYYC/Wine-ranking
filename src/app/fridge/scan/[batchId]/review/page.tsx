@@ -7,7 +7,7 @@ interface ScanItem {
   id: number; status: string; imageData?: string | null;
   name?: string | null; winery?: string | null; vintage?: number | null;
   varietal?: string | null; region?: string | null; country?: string | null;
-  color?: string | null; confidence?: number | null;
+  color?: string | null; confidence?: number | null; quantity?: number;
 }
 
 const colors = ["red", "white", "rosé", "sparkling", "dessert", "orange"];
@@ -40,7 +40,7 @@ export default function ReviewPage() {
       name: item.name || "", winery: item.winery || "",
       vintage: item.vintage?.toString() || "", varietal: item.varietal || "",
       region: item.region || "", country: item.country || "",
-      color: item.color || "",
+      color: item.color || "", quantity: (item.quantity || 1).toString(),
     });
   };
 
@@ -61,6 +61,7 @@ export default function ReviewPage() {
             vintage: edits.vintage ? parseInt(edits.vintage) : undefined,
             varietal: edits.varietal, region: edits.region,
             country: edits.country, color: edits.color,
+            quantity: edits.quantity ? parseInt(edits.quantity) : 1,
           } : undefined,
         }],
       }),
@@ -172,9 +173,10 @@ export default function ReviewPage() {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div><label className={labelClass}>Region</label><input type="text" value={edits.region || ""} onChange={(e) => setEdits({ ...edits, region: e.target.value })} className={inputClass} /></div>
             <div><label className={labelClass}>Country</label><input type="text" value={edits.country || ""} onChange={(e) => setEdits({ ...edits, country: e.target.value })} className={inputClass} /></div>
+            <div><label className={labelClass}>Qty</label><input type="number" min="1" value={edits.quantity || "1"} onChange={(e) => setEdits({ ...edits, quantity: e.target.value })} className={inputClass} /></div>
           </div>
         </div>
       </div>

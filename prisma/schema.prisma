@@ -65,6 +65,7 @@ model ScanItem {
   foodPairings String?
   onlineRating Float?
   confidence   Float?
+  quantity     Int        @default(1) // how many bottles of this wine detected
   wineId       Int?       // set when confirmed and saved as Wine
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt

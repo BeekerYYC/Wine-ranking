@@ -62,8 +62,7 @@ export async function POST(
               type: "text",
               text: `Analyze this wine image. It may show a SINGLE bottle or MULTIPLE bottles (e.g. a wine fridge shelf/drawer).
 
-If you see multiple distinct bottles, return a JSON array of objects.
-If you see a single bottle, return a JSON array with one object.
+Return a JSON array of UNIQUE wine objects. If you see multiple bottles of the same wine, DO NOT repeat them — instead set a higher "quantity" count on that one entry.
 
 Each object must have these fields:
 - name: the wine name (string)
@@ -77,6 +76,7 @@ Each object must have these fields:
 - foodPairings: 3-4 food pairing suggestions comma-separated (string)
 - onlineRating: estimated critic/community score 0-100 (number or null)
 - confidence: how confident you are in this identification, 0.0 to 1.0 (number)
+- quantity: how many bottles of this exact wine you can see (number, minimum 1)
 
 For bottles where labels are partially obscured, do your best and set confidence lower.
 Return ONLY a valid JSON array, no markdown code blocks or other text.`,
@@ -114,6 +114,7 @@ Return ONLY a valid JSON array, no markdown code blocks or other text.`,
           foodPairings: b.foodPairings || null,
           onlineRating: b.onlineRating ? parseFloat(b.onlineRating) : null,
           confidence: b.confidence ? parseFloat(b.confidence) : null,
+          quantity: b.quantity ? parseInt(b.quantity) : 1,
         },
       });
     } else {
@@ -135,6 +136,7 @@ Return ONLY a valid JSON array, no markdown code blocks or other text.`,
           foodPairings: first.foodPairings || null,
           onlineRating: first.onlineRating ? parseFloat(first.onlineRating) : null,
           confidence: first.confidence ? parseFloat(first.confidence) : null,
+          quantity: first.quantity ? parseInt(first.quantity) : 1,
         },
       });
 
@@ -157,6 +159,7 @@ Return ONLY a valid JSON array, no markdown code blocks or other text.`,
             foodPairings: (b.foodPairings as string) || null,
             onlineRating: b.onlineRating ? parseFloat(String(b.onlineRating)) : null,
             confidence: b.confidence ? parseFloat(String(b.confidence)) : null,
+            quantity: b.quantity ? parseInt(String(b.quantity)) : 1,
           })),
         });
       }

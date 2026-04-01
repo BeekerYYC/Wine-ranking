@@ -33,33 +33,63 @@ export async function POST(
       });
       results.push({ scanItemId: item.scanItemId, action: "rejected" });
     } else {
-      // Create Wine from scan item
-      const wine = await prisma.wine.create({
-        data: {
-          name: item.edits?.name || scanItem.name || "Unknown Wine",
-          winery: item.edits?.winery ?? scanItem.winery,
-          vintage: item.edits?.vintage ?? scanItem.vintage,
-          varietal: item.edits?.varietal ?? scanItem.varietal,
-          region: item.edits?.region ?? scanItem.region,
-          country: item.edits?.country ?? scanItem.country,
-          color: item.edits?.color ?? scanItem.color,
-          description: scanItem.description,
-          foodPairings: scanItem.foodPairings,
-          onlineRating: scanItem.onlineRating,
-          confidence: scanItem.confidence,
-          imageData: scanItem.imageData,
-          price: item.edits?.price ?? null,
-          quantity: item.edits?.quantity ?? 1,
-          status: "collection",
-        },
-      });
+      const wineName = item.edits?.name || scanItem.name || "Unknown Wine";
+      const wineVintage = item.edits?.vintage ?? scanItem.vintage;
+      const wineWinery = item.edits?.winery ?? scanItem.winery;
+      const addQty = item.edits?.quantity ?? scanItem.quantity ?? 1;
 
-      await prisma.scanItem.update({
-        where: { id: item.scanItemId },
-        data: { status: "confirmed", wineId: wine.id },
-      });
+      // Check for existing wine with same name + vintage (+ winery if available)
+      const existingWhere: Record<string, unknown> = {
+        name: { equals: wineName, mode: "insensitive" },
+        status: "collection",
+      };
+      if (wineVintage) existingWhere.vintage = wineVintage;
+      if (wineWinery) existingWhere.winery = { equals: wineWinery, mode: "insensitive" };
 
-      results.push({ scanItemId: item.scanItemId, action: "confirmed", wineId: wine.id });
+      const existing = await prisma.wine.findFirst({ where: existingWhere });
+
+      if (existing) {
+        // Duplicate found — increment quantity
+        const wine = await prisma.wine.update({
+          where: { id: existing.id },
+          data: { quantity: existing.quantity + addQty },
+        });
+
+        await prisma.scanItem.update({
+          where: { id: item.scanItemId },
+          data: { status: "confirmed", wineId: wine.id },
+        });
+
+        results.push({ scanItemId: item.scanItemId, action: "merged", wineId: wine.id, addedQty: addQty });
+      } else {
+        // New wine — create
+        const wine = await prisma.wine.create({
+          data: {
+            name: wineName,
+            winery: wineWinery,
+            vintage: wineVintage,
+            varietal: item.edits?.varietal ?? scanItem.varietal,
+            region: item.edits?.region ?? scanItem.region,
+            country: item.edits?.country ?? scanItem.country,
+            color: item.edits?.color ?? scanItem.color,
+            description: scanItem.description,
+            foodPairings: scanItem.foodPairings,
+            onlineRating: scanItem.onlineRating,
+            confidence: scanItem.confidence,
+            imageData: scanItem.imageData,
+            price: item.edits?.price ?? null,
+            quantity: addQty,
+            status: "collection",
+          },
+        });
+
+        await prisma.scanItem.update({
+          where: { id: item.scanItemId },
+          data: { status: "confirmed", wineId: wine.id },
+        });
+
+        results.push({ scanItemId: item.scanItemId, action: "confirmed", wineId: wine.id });
+      }
     }
   }
 
