@@ -1,0 +1,26 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Wine {
+  id          Int      @id @default(autoincrement())
+  name        String
+  winery      String?
+  vintage     Int?
+  varietal    String?
+  region      String?
+  country     String?
+  color       String?  // red, white, rosé, sparkling, dessert, orange
+  price       Float?
+  rating      Int?     // 1-5
+  notes       String?
+  description String?  // LLM-generated description/info
+  imageData   String?  // base64 encoded image
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
