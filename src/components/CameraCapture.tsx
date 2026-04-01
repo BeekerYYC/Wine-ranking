@@ -16,7 +16,6 @@ export default function CameraCapture({
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
-        // Resize to keep payload reasonable
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement("canvas");
@@ -51,13 +50,13 @@ export default function CameraCapture({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="w-full border-2 border-dashed border-stone-300 rounded-xl p-8 text-center hover:border-amber-500 hover:bg-amber-50 transition-colors cursor-pointer"
+        className="w-full border-2 border-dashed border-wine-700/50 rounded-xl p-8 text-center hover:border-wine-500 hover:bg-wine-900/40 transition-colors cursor-pointer"
       >
         <div className="text-4xl mb-2">📸</div>
-        <p className="text-stone-600 font-medium">
+        <p className="text-wine-200 font-medium">
           Take photo of wine label
         </p>
-        <p className="text-sm text-stone-400 mt-1">
+        <p className="text-sm text-wine-500 mt-1">
           or tap to choose from gallery
         </p>
       </button>

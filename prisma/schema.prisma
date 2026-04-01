@@ -9,19 +9,51 @@ datasource db {
 }
 
 model Wine {
+  id            Int      @id @default(autoincrement())
+  name          String
+  winery        String?
+  vintage       Int?
+  varietal      String?
+  region        String?
+  country       String?
+  color         String?  // red, white, rosé, sparkling, dessert, orange
+  price         Float?
+  rating        Int?     // 1-5
+  notes         String?
+  description   String?  // LLM-generated description/info
+  imageData     String?  // base64 encoded image
+  quantity      Int      @default(1)
+  status        String   @default("collection") // collection, wishlist, consumed, restaurant
+  occasion      String?  // comma-separated: date-night, party, gift, weeknight, celebration
+  foodPairings  String?  // AI-generated food pairings
+  onlineRating  Float?   // estimated critic/community score (out of 100)
+  storeId       Int?
+  store         Store?   @relation(fields: [storeId], references: [id])
+  listId        Int?
+  list          WineList? @relation(fields: [listId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Store {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  wines     Wine[]
+  createdAt DateTime @default(now())
+}
+
+model WineList {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  wines     Wine[]
+  createdAt DateTime @default(now())
+}
+
+model Achievement {
   id          Int      @id @default(autoincrement())
+  key         String   @unique // e.g. "first_wine", "five_countries"
   name        String
-  winery      String?
-  vintage     Int?
-  varietal    String?
-  region      String?
-  country     String?
-  color       String?  // red, white, rosé, sparkling, dessert, orange
-  price       Float?
-  rating      Int?     // 1-5
-  notes       String?
-  description String?  // LLM-generated description/info
-  imageData   String?  // base64 encoded image
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  description String
+  icon        String   // emoji
+  unlockedAt  DateTime @default(now())
 }

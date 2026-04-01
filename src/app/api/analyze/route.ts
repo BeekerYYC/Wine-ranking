@@ -17,7 +17,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Strip data URL prefix if present
   const base64 = imageData.replace(/^data:image\/\w+;base64,/, "");
   const mediaType = imageData.startsWith("data:image/png")
     ? "image/png"
@@ -44,7 +43,9 @@ export async function POST(req: NextRequest) {
 - region: wine region (e.g. "Napa Valley", "Bordeaux")
 - country: country of origin
 - color: one of "red", "white", "rosé", "sparkling", "dessert", "orange"
-- description: 2-3 sentences about this wine - what makes it notable, typical flavor profile, food pairings. Use your knowledge to provide helpful context.
+- description: 2-3 sentences about this wine - what makes it notable, typical flavor profile. Use your knowledge to provide helpful context.
+- foodPairings: 3-4 specific food pairing suggestions as a comma-separated string (e.g. "Grilled lamb chops, Aged cheddar, Dark chocolate, Mushroom risotto")
+- onlineRating: your best estimate of this wine's typical community/critic rating on a 100-point scale based on your knowledge (number or null if unknown). Consider vintage, producer reputation, and region.
 
 Return ONLY valid JSON, no markdown code blocks or other text.`,
           },
