@@ -8,7 +8,7 @@ interface Wine {
   id: number; name: string; winery?: string | null; vintage?: number | null;
   varietal?: string | null; color?: string | null; price?: number | null;
   rating?: number | null; quantity: number; imageData?: string | null;
-  onlineRating?: number | null;
+  onlineRating?: number | null; confidence?: number | null;
 }
 
 const colorDot: Record<string, string> = {
@@ -176,7 +176,14 @@ export default function FridgePage() {
                     {wine.rating ? (
                       <div className="flex gap-px">{[1,2,3,4,5].map((s) => <span key={s} className={`text-[9px] ${s <= wine.rating! ? "text-gold" : "text-surface-highlight"}`}>★</span>)}</div>
                     ) : <span className="text-[10px] text-text-muted">Unrated</span>}
-                    {wine.quantity > 1 && <span className="text-[10px] text-text-tertiary tabular-nums bg-surface-overlay px-1 rounded">×{wine.quantity}</span>}
+                    <div className="flex items-center gap-1">
+                      {wine.confidence != null && (
+                        <span className={`text-[9px] font-medium tabular-nums px-1 rounded ${
+                          wine.confidence >= 0.8 ? "text-success bg-success-muted" : wine.confidence >= 0.5 ? "text-gold bg-gold-muted" : "text-danger bg-danger-muted"
+                        }`}>{Math.round(wine.confidence * 100)}%</span>
+                      )}
+                      {wine.quantity > 1 && <span className="text-[10px] text-text-tertiary tabular-nums bg-surface-overlay px-1 rounded">×{wine.quantity}</span>}
+                    </div>
                   </div>
                 </a>
                 {/* Quick actions on hover */}

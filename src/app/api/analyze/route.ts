@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
 - description: 2-3 sentences about this wine - what makes it notable, typical flavor profile. Use your knowledge to provide helpful context.
 - foodPairings: 3-4 specific food pairing suggestions as a comma-separated string (e.g. "Grilled lamb chops, Aged cheddar, Dark chocolate, Mushroom risotto")
 - onlineRating: your best estimate of this wine's typical community/critic rating on a 100-point scale based on your knowledge (number or null if unknown). Consider vintage, producer reputation, and region.
+- confidence: how confident you are in this identification, 0.0 to 1.0 (number). Consider label visibility and how clearly you can read the text.
 
 Return ONLY valid JSON, no markdown code blocks or other text.`,
           },

@@ -26,6 +26,7 @@ interface Wine {
   quantity?: number;
   status?: string;
   onlineRating?: number | null;
+  confidence?: number | null;
   imageData?: string | null;
 }
 
@@ -97,6 +98,11 @@ export default function WineCard({
             </div>
 
             <div className="flex items-center gap-2">
+              {wine.confidence != null && (
+                <span className={`text-[10px] font-medium tabular-nums px-1.5 py-0.5 rounded ${
+                  wine.confidence >= 0.8 ? "text-success bg-success-muted" : wine.confidence >= 0.5 ? "text-gold bg-gold-muted" : "text-danger bg-danger-muted"
+                }`}>{Math.round(wine.confidence * 100)}%</span>
+              )}
               {wine.onlineRating && (
                 <span className="text-[11px] text-gold font-semibold tabular-nums">{wine.onlineRating}</span>
               )}

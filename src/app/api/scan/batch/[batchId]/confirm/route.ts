@@ -46,6 +46,7 @@ export async function POST(
           description: scanItem.description,
           foodPairings: scanItem.foodPairings,
           onlineRating: scanItem.onlineRating,
+          confidence: scanItem.confidence,
           imageData: scanItem.imageData,
           price: item.edits?.price ?? null,
           quantity: item.edits?.quantity ?? 1,

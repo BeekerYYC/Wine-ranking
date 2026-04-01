@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
       occasion: body.occasion || null,
       foodPairings: body.foodPairings || null,
       onlineRating: body.onlineRating ? parseFloat(body.onlineRating) : null,
+      confidence: body.confidence ? parseFloat(body.confidence) : null,
       storeId,
       listId: body.listId ? parseInt(body.listId) : null,
     },

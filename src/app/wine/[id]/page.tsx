@@ -11,7 +11,7 @@ interface Wine {
   color?: string | null; price?: number | null; rating?: number | null;
   notes?: string | null; description?: string | null; imageData?: string | null;
   quantity: number; status: string; occasion?: string | null;
-  foodPairings?: string | null; onlineRating?: number | null;
+  foodPairings?: string | null; onlineRating?: number | null; confidence?: number | null;
   consumedAt?: string | null;
   store?: { id: number; name: string } | null;
   list?: { id: number; name: string } | null; createdAt: string;
@@ -138,6 +138,11 @@ export default function WineDetail() {
         {wine.price != null && <span className="text-xl font-bold tabular-nums">${wine.price.toFixed(2)}</span>}
         {wine.onlineRating && (
           <span className="text-[13px]"><span className="text-gold font-bold tabular-nums">{wine.onlineRating}</span><span className="text-text-muted">/100 est.</span></span>
+        )}
+        {wine.confidence != null && (
+          <span className={`text-[11px] font-semibold tabular-nums px-2 py-0.5 rounded-md ${
+            wine.confidence >= 0.8 ? "text-success bg-success-muted" : wine.confidence >= 0.5 ? "text-gold bg-gold-muted" : "text-danger bg-danger-muted"
+          }`}>AI {Math.round(wine.confidence * 100)}% match</span>
         )}
       </div>
 

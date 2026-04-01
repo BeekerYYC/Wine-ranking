@@ -27,7 +27,7 @@ export default function AddWine() {
     name: "", winery: "", vintage: "", varietal: "", region: "", country: "",
     color: "", price: "", rating: 0, notes: "", description: "", quantity: "1",
     status: "collection", storeName: "", occasion: [] as string[],
-    foodPairings: "", onlineRating: "", listId: "",
+    foodPairings: "", onlineRating: "", confidence: "", listId: "",
   });
 
   useEffect(() => {
@@ -58,6 +58,7 @@ export default function AddWine() {
         color: info.color || f.color, description: info.description || f.description,
         foodPairings: info.foodPairings || f.foodPairings,
         onlineRating: info.onlineRating?.toString() || f.onlineRating,
+        confidence: info.confidence?.toString() || f.confidence,
       }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analysis failed");
@@ -215,7 +216,7 @@ export default function AddWine() {
         </div>
 
         {/* AI results */}
-        {(form.onlineRating || form.foodPairings || form.description) && (
+        {(form.onlineRating || form.foodPairings || form.description || form.confidence) && (
           <div className="bg-surface-raised rounded-xl border border-border-subtle p-4 space-y-3">
             <div className="flex items-center gap-2">
               <div className="w-5 h-5 rounded bg-gold-muted flex items-center justify-center">
@@ -224,6 +225,14 @@ export default function AddWine() {
                 </svg>
               </div>
               <span className="text-[11px] text-text-tertiary uppercase tracking-wider font-medium">AI Analysis</span>
+              {form.confidence && (() => {
+                const c = parseFloat(form.confidence);
+                return (
+                  <span className={`text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded ${
+                    c >= 0.8 ? "text-success bg-success-muted" : c >= 0.5 ? "text-gold bg-gold-muted" : "text-danger bg-danger-muted"
+                  }`}>{Math.round(c * 100)}% confident</span>
+                );
+              })()}
             </div>
             {form.onlineRating && (
               <div className="flex items-center gap-3">

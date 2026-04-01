@@ -27,6 +27,7 @@ model Wine {
   occasion      String?  // comma-separated: date-night, party, gift, weeknight, celebration
   foodPairings  String?  // AI-generated food pairings
   onlineRating  Float?   // estimated critic/community score (out of 100)
+  confidence    Float?   // AI identification confidence 0-1
   storeId       Int?
   store         Store?   @relation(fields: [storeId], references: [id])
   listId        Int?
