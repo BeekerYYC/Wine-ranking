@@ -5,11 +5,12 @@ export async function GET(req: NextRequest) {
   const search = req.nextUrl.searchParams.get("search") || "";
   const color = req.nextUrl.searchParams.get("color") || "";
   const status = req.nextUrl.searchParams.get("status") || "";
+  const category = req.nextUrl.searchParams.get("category") || "wine";
   const listId = req.nextUrl.searchParams.get("listId") || "";
   const sort = req.nextUrl.searchParams.get("sort") || "createdAt";
   const order = req.nextUrl.searchParams.get("order") || "desc";
 
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = { category };
 
   if (search) {
     where.OR = [
@@ -36,7 +37,6 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
 
-  // Handle store creation/lookup
   let storeId: number | null = null;
   if (body.storeName) {
     const store = await prisma.store.upsert({
@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
   const wine = await prisma.wine.create({
     data: {
       name: body.name,
+      category: body.category || "wine",
       winery: body.winery || null,
       vintage: body.vintage ? parseInt(body.vintage) : null,
       varietal: body.varietal || null,

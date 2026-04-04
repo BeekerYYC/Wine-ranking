@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-export async function GET() {
-  const wines = await prisma.wine.findMany();
+export async function GET(req: NextRequest) {
+  const category = req.nextUrl.searchParams.get("category") || "wine";
+
+  const wines = await prisma.wine.findMany({ where: { category } });
 
   const total = wines.length;
   const rated = wines.filter((w) => w.rating);
@@ -21,7 +23,6 @@ export async function GET() {
   const consumed = wines.filter((w) => w.status === "consumed").length;
   const wishlist = wines.filter((w) => w.status === "wishlist").length;
 
-  // Varietal breakdown
   const varietalMap: Record<string, number> = {};
   wines.forEach((w) => {
     if (w.varietal) varietalMap[w.varietal] = (varietalMap[w.varietal] || 0) + 1;
@@ -30,7 +31,6 @@ export async function GET() {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count);
 
-  // Color breakdown
   const colorMap: Record<string, number> = {};
   wines.forEach((w) => {
     if (w.color) colorMap[w.color] = (colorMap[w.color] || 0) + 1;
@@ -39,7 +39,6 @@ export async function GET() {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count);
 
-  // Country breakdown
   const countryMap: Record<string, number> = {};
   wines.forEach((w) => {
     if (w.country) countryMap[w.country] = (countryMap[w.country] || 0) + 1;
@@ -48,21 +47,10 @@ export async function GET() {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count);
 
-  // Region breakdown
-  const regionMap: Record<string, number> = {};
-  wines.forEach((w) => {
-    if (w.region) regionMap[w.region] = (regionMap[w.region] || 0) + 1;
-  });
-  const regionBreakdown = Object.entries(regionMap)
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count);
-
-  // Price vs rating data
   const priceRating = wines
     .filter((w) => w.price && w.rating)
     .map((w) => ({ name: w.name, price: w.price, rating: w.rating }));
 
-  // Consumption pace (avg days between adding wines)
   const sorted = [...wines].sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
@@ -73,7 +61,6 @@ export async function GET() {
     avgDaysBetween = (last - first) / (1000 * 60 * 60 * 24) / (sorted.length - 1);
   }
 
-  // Monthly additions
   const monthlyMap: Record<string, number> = {};
   wines.forEach((w) => {
     const d = new Date(w.createdAt);
@@ -84,20 +71,17 @@ export async function GET() {
     .map(([month, count]) => ({ month, count }))
     .sort((a, b) => a.month.localeCompare(b.month));
 
-  // Rating distribution
   const ratingDist = [1, 2, 3, 4, 5].map((r) => ({
     rating: r,
     count: wines.filter((w) => w.rating === r).length,
   }));
 
-  // Top wines
   const topWines = [...wines]
     .filter((w) => w.rating)
     .sort((a, b) => (b.rating || 0) - (a.rating || 0))
     .slice(0, 10)
     .map((w) => ({ id: w.id, name: w.name, rating: w.rating, winery: w.winery, vintage: w.vintage }));
 
-  // Best value (highest rating / price ratio)
   const bestValue = [...wines]
     .filter((w) => w.rating && w.price && w.price > 0)
     .map((w) => ({ ...w, value: (w.rating || 0) / (w.price || 1) }))
@@ -105,44 +89,28 @@ export async function GET() {
     .slice(0, 5)
     .map((w) => ({ id: w.id, name: w.name, rating: w.rating, price: w.price, winery: w.winery }));
 
-  // Discovery score
   const uniqueVarietals = new Set(wines.map((w) => w.varietal).filter(Boolean)).size;
   const uniqueRegions = new Set(wines.map((w) => w.region).filter(Boolean)).size;
   const uniqueCountries = new Set(wines.map((w) => w.country).filter(Boolean)).size;
 
-  // Wine of the day (deterministic based on date)
   const today = new Date();
   const dayIndex = (today.getFullYear() * 366 + today.getMonth() * 31 + today.getDate()) % Math.max(wines.length, 1);
   const wineOfDay = wines.length > 0 ? wines[dayIndex] : null;
 
-  // On this day (wines added on this date in previous years)
   const onThisDay = wines.filter((w) => {
     const d = new Date(w.createdAt);
     return d.getMonth() === today.getMonth() && d.getDate() === today.getDate() && d.getFullYear() !== today.getFullYear();
   });
 
   return NextResponse.json({
-    total,
-    totalBottles,
-    inCollection,
-    consumed,
-    wishlist,
+    total, totalBottles, inCollection, consumed, wishlist,
     avgRating: Math.round(avgRating * 10) / 10,
     avgPrice: Math.round(avgPrice * 100) / 100,
     totalSpent: Math.round(totalSpent * 100) / 100,
     avgDaysBetween: Math.round(avgDaysBetween * 10) / 10,
-    varietalBreakdown,
-    colorBreakdown,
-    countryBreakdown,
-    regionBreakdown,
-    priceRating,
-    monthlyAdditions,
-    ratingDist,
-    topWines,
-    bestValue,
-    uniqueVarietals,
-    uniqueRegions,
-    uniqueCountries,
+    varietalBreakdown, colorBreakdown, countryBreakdown,
+    priceRating, monthlyAdditions, ratingDist, topWines, bestValue,
+    uniqueVarietals, uniqueRegions, uniqueCountries,
     wineOfDay: wineOfDay ? { id: wineOfDay.id, name: wineOfDay.name, winery: wineOfDay.winery, rating: wineOfDay.rating, imageData: wineOfDay.imageData, color: wineOfDay.color, vintage: wineOfDay.vintage } : null,
     onThisDay: onThisDay.map((w) => ({ id: w.id, name: w.name, winery: w.winery, createdAt: w.createdAt, rating: w.rating })),
   });

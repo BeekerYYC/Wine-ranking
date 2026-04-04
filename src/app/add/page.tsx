@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import CameraCapture from "@/components/CameraCapture";
 import StarRating from "@/components/StarRating";
+import { useCategory } from "@/lib/CategoryContext";
 
-const colors = ["red", "white", "rosé", "sparkling", "dessert", "orange"];
 const occasions = ["date-night", "weeknight", "party", "gift", "celebration", "casual"];
 const statusOptions = [
   { value: "collection", label: "In my collection" },
@@ -16,6 +16,7 @@ const statusOptions = [
 
 export default function AddWine() {
   const router = useRouter();
+  const { category, config } = useCategory();
   const [imageData, setImageData] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -46,7 +47,7 @@ export default function AddWine() {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageData: data }),
+        body: JSON.stringify({ imageData: data, category }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "Analysis failed");
       const info = await res.json();
@@ -82,13 +83,13 @@ export default function AddWine() {
       const res = await fetch("/api/wines", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, occasion: form.occasion.join(","), imageData }),
+        body: JSON.stringify({ ...form, category, occasion: form.occasion.join(","), imageData }),
       });
       if (!res.ok) throw new Error("Failed to save");
       const wine = await res.json();
       router.push(`/wine/${wine.id}`);
     } catch {
-      setError("Failed to save wine");
+      setError(`Failed to save ${config.itemName}`);
       setSaving(false);
     }
   };
@@ -99,7 +100,7 @@ export default function AddWine() {
   return (
     <div className="max-w-lg mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">Add Wine</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Add {config.label}</h1>
         <p className="text-[13px] text-text-tertiary mt-0.5">Snap a label or enter details manually</p>
       </div>
 
@@ -107,7 +108,7 @@ export default function AddWine() {
         <CameraCapture onCapture={handleCapture} />
       ) : (
         <div className="relative mb-5 group">
-          <img src={imageData} alt="Wine label" className="w-full max-h-52 object-contain rounded-xl border border-border-subtle" />
+          <img src={imageData} alt="Label" className="w-full max-h-52 object-contain rounded-xl border border-border-subtle" />
           <button
             type="button"
             onClick={() => { setImageData(null); setForm((f) => ({ ...f, description: "", foodPairings: "", onlineRating: "" })); }}
@@ -123,7 +124,7 @@ export default function AddWine() {
           <div className="animate-spin w-5 h-5 border-2 border-gold border-t-transparent rounded-full flex-shrink-0" />
           <div>
             <p className="text-[13px] text-text-primary font-medium">Analyzing label...</p>
-            <p className="text-[11px] text-text-tertiary">Extracting wine details with AI</p>
+            <p className="text-[11px] text-text-tertiary">Extracting {config.itemName} details with AI</p>
           </div>
         </div>
       )}
@@ -135,31 +136,31 @@ export default function AddWine() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4 mt-5">
-        {/* Wine name */}
+        {/* Name */}
         <div>
-          <label className={labelClass}>Wine name <span className="text-gold">*</span></label>
-          <input type="text" required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Opus One 2019" className={inputClass} />
+          <label className={labelClass}>{config.label} name <span className="text-gold">*</span></label>
+          <input type="text" required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder={`e.g. ${category === "wine" ? "Opus One 2019" : category === "coffee" ? "Ethiopian Yirgacheffe" : "Hazy IPA"}`} className={inputClass} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div><label className={labelClass}>Winery</label><input type="text" value={form.winery} onChange={(e) => set("winery", e.target.value)} className={inputClass} /></div>
-          <div><label className={labelClass}>Vintage</label><input type="number" value={form.vintage} onChange={(e) => set("vintage", e.target.value)} placeholder="2020" className={inputClass} /></div>
+          <div><label className={labelClass}>{config.producerLabel}</label><input type="text" value={form.winery} onChange={(e) => set("winery", e.target.value)} className={inputClass} /></div>
+          <div><label className={labelClass}>{config.vintageLabel}</label><input type={category === "wine" ? "number" : "text"} value={form.vintage} onChange={(e) => set("vintage", e.target.value)} placeholder={category === "wine" ? "2020" : ""} className={inputClass} /></div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div><label className={labelClass}>Varietal</label><input type="text" value={form.varietal} onChange={(e) => set("varietal", e.target.value)} placeholder="Cabernet Sauvignon" className={inputClass} /></div>
+          <div><label className={labelClass}>{config.varietalLabel}</label><input type="text" value={form.varietal} onChange={(e) => set("varietal", e.target.value)} placeholder={category === "wine" ? "Cabernet Sauvignon" : category === "coffee" ? "Colombia" : "IPA"} className={inputClass} /></div>
           <div>
-            <label className={labelClass}>Color</label>
+            <label className={labelClass}>{config.colorLabel}</label>
             <select value={form.color} onChange={(e) => set("color", e.target.value)} className={inputClass}>
               <option value="">Select...</option>
-              {colors.map((c) => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+              {config.types.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div><label className={labelClass}>Region</label><input type="text" value={form.region} onChange={(e) => set("region", e.target.value)} placeholder="Napa Valley" className={inputClass} /></div>
-          <div><label className={labelClass}>Country</label><input type="text" value={form.country} onChange={(e) => set("country", e.target.value)} placeholder="USA" className={inputClass} /></div>
+          <div><label className={labelClass}>Region</label><input type="text" value={form.region} onChange={(e) => set("region", e.target.value)} placeholder={category === "wine" ? "Napa Valley" : category === "coffee" ? "Sidamo" : "Portland, OR"} className={inputClass} /></div>
+          <div><label className={labelClass}>Country</label><input type="text" value={form.country} onChange={(e) => set("country", e.target.value)} className={inputClass} /></div>
         </div>
 
         <div className="grid grid-cols-3 gap-3">
@@ -242,7 +243,7 @@ export default function AddWine() {
             )}
             {form.foodPairings && (
               <div>
-                <p className="text-[11px] text-text-muted mb-1">Pairings</p>
+                <p className="text-[11px] text-text-muted mb-1">{config.pairingLabel}</p>
                 <p className="text-[12px] text-text-secondary leading-relaxed">{form.foodPairings}</p>
               </div>
             )}
@@ -257,7 +258,7 @@ export default function AddWine() {
 
         <button type="submit" disabled={!form.name.trim() || saving}
           className="w-full bg-gold/90 hover:bg-gold disabled:opacity-30 text-bg py-2.5 rounded-lg text-[13px] font-semibold transition-all mt-2">
-          {saving ? "Saving..." : "Save wine"}
+          {saving ? "Saving..." : `Save ${config.itemName}`}
         </button>
       </form>
     </div>

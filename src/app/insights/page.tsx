@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { useCategory } from "@/lib/CategoryContext";
 
 export default function InsightsPage() {
+  const { category, config } = useCategory();
   const [insights, setInsights] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const getInsights = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/sommelier", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: "", type: "insights" }) });
+      const res = await fetch("/api/sommelier", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: "", type: "insights", category }) });
       setInsights((await res.json()).response);
     } catch { setInsights("Failed to generate insights."); }
     finally { setLoading(false); }
@@ -19,7 +21,7 @@ export default function InsightsPage() {
     <div className="max-w-lg mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Taste Insights</h1>
-        <p className="text-[13px] text-text-tertiary mt-0.5">AI analysis of your preferences and patterns</p>
+        <p className="text-[13px] text-text-tertiary mt-0.5">AI analysis of your {config.itemName} preferences and patterns</p>
       </div>
 
       {!insights && !loading && (
@@ -31,7 +33,7 @@ export default function InsightsPage() {
             </svg>
           </div>
           <p className="text-[14px] font-semibold text-text-primary group-hover:text-gold transition-colors">Analyze my palate</p>
-          <p className="text-[12px] text-text-muted mt-1">Get insights about your taste, patterns, and what to try next</p>
+          <p className="text-[12px] text-text-muted mt-1">Get insights about your {config.itemName} taste, patterns, and what to try next</p>
         </button>
       )}
 

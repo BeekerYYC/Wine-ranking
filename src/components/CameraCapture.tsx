@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { useCategory } from "@/lib/CategoryContext";
 
 export default function CameraCapture({
   onCapture,
@@ -8,6 +9,7 @@ export default function CameraCapture({
   onCapture: (dataUrl: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const { config } = useCategory();
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -59,7 +61,7 @@ export default function CameraCapture({
           </svg>
         </div>
         <p className="text-text-primary font-medium text-[14px]">
-          Capture wine label
+          Capture {config.itemName} label
         </p>
         <p className="text-[12px] text-text-tertiary mt-1">
           Take a photo or choose from gallery

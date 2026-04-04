@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
+import { CategoryProvider } from "@/lib/CategoryContext";
 
 export const metadata: Metadata = {
-  title: "Wine Ranker",
-  description: "Track and rank your wine collection",
+  title: "Beverage Ranker",
+  description: "Track and rank your wine, coffee, and beer collection",
 };
 
 export const viewport: Viewport = {
@@ -31,12 +32,14 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-bg text-text-primary min-h-screen font-sans">
-        <Sidebar />
-        <main className="md:ml-[220px] min-h-screen pb-20 md:pb-0">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-            {children}
-          </div>
-        </main>
+        <CategoryProvider>
+          <Sidebar />
+          <main className="md:ml-[220px] min-h-screen pb-20 md:pb-0">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+              {children}
+            </div>
+          </main>
+        </CategoryProvider>
       </body>
     </html>
   );

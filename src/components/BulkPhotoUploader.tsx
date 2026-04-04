@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useCategory } from "@/lib/CategoryContext";
 
 function resizeImage(file: File): Promise<string> {
   return new Promise((resolve) => {
@@ -36,6 +37,7 @@ export default function BulkPhotoUploader({
   disabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const { config } = useCategory();
   const [photos, setPhotos] = useState<string[]>([]);
   const [processing, setProcessing] = useState(false);
 
@@ -56,7 +58,6 @@ export default function BulkPhotoUploader({
     <div>
       <input ref={inputRef} type="file" accept="image/*" multiple onChange={handleFiles} className="hidden" />
 
-      {/* Photo grid */}
       {photos.length > 0 && (
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-4">
           {photos.map((photo, i) => (
@@ -73,7 +74,6 @@ export default function BulkPhotoUploader({
             </div>
           ))}
 
-          {/* Add more button */}
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
@@ -86,7 +86,6 @@ export default function BulkPhotoUploader({
         </div>
       )}
 
-      {/* Empty state */}
       {photos.length === 0 && (
         <button
           type="button"
@@ -100,10 +99,10 @@ export default function BulkPhotoUploader({
             </svg>
           </div>
           <p className="text-[14px] font-semibold text-text-primary group-hover:text-gold transition-colors">
-            Select photos of your wine fridge
+            Select photos of your {config.itemNamePlural}
           </p>
           <p className="text-[12px] text-text-muted mt-1">
-            Snap each drawer or individual bottles — AI will identify them all
+            Snap each shelf or individual items — AI will identify them all
           </p>
         </button>
       )}
@@ -112,7 +111,6 @@ export default function BulkPhotoUploader({
         <p className="text-[12px] text-text-tertiary text-center mt-2">Preparing photos...</p>
       )}
 
-      {/* Start scan button */}
       {photos.length > 0 && (
         <button
           type="button"

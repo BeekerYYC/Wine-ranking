@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import StarRating from "@/components/StarRating";
 import ConsumeModal from "@/components/ConsumeModal";
+import { useCategory } from "@/lib/CategoryContext";
 
 interface Wine {
   id: number; name: string; winery?: string | null; vintage?: number | null;
@@ -17,14 +18,10 @@ interface Wine {
   list?: { id: number; name: string } | null; createdAt: string;
 }
 
-const colorDot: Record<string, string> = {
-  red: "bg-wine-red", white: "bg-wine-white", "rosé": "bg-wine-rose",
-  sparkling: "bg-wine-sparkling", dessert: "bg-wine-dessert", orange: "bg-wine-orange",
-};
-
 export default function WineDetail() {
   const { id } = useParams();
   const router = useRouter();
+  const { config } = useCategory();
   const [wine, setWine] = useState<Wine | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -78,10 +75,13 @@ export default function WineDetail() {
   };
 
   const handleDelete = async () => {
-    if (!confirm("Delete this wine?")) return;
+    if (!confirm(`Delete this ${config.itemName}?`)) return;
     await fetch(`/api/wines/${id}`, { method: "DELETE" });
     router.push("/");
   };
+
+  const typeEntry = config.types.find((t) => t.value === wine?.color);
+  const dotColor = typeEntry?.dotColor || "#4a4640";
 
   if (loading) return (
     <div className="max-w-lg mx-auto">
@@ -93,7 +93,7 @@ export default function WineDetail() {
       </div>
     </div>
   );
-  if (!wine) return <div className="text-center py-16 text-text-tertiary">Wine not found</div>;
+  if (!wine) return <div className="text-center py-16 text-text-tertiary">{config.label} not found</div>;
 
   const occasionTags = wine.occasion ? wine.occasion.split(",").filter(Boolean) : [];
 
@@ -112,7 +112,6 @@ export default function WineDetail() {
         </div>
       )}
 
-      {/* Header */}
       <div className="mb-5">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-xl font-bold text-text-primary leading-snug">{wine.name}</h1>
@@ -121,11 +120,10 @@ export default function WineDetail() {
         {wine.winery && <p className="text-[14px] text-text-secondary mt-1">{wine.winery}</p>}
       </div>
 
-      {/* Meta tags */}
       <div className="flex items-center gap-2 flex-wrap mb-5">
         {wine.color && (
           <span className="flex items-center gap-1.5 text-[12px] text-text-secondary bg-surface-raised px-2 py-1 rounded-md border border-border-subtle">
-            <span className={`w-2 h-2 rounded-full ${colorDot[wine.color] || "bg-surface-highlight"}`} />{wine.color}
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: dotColor }} />{typeEntry?.label || wine.color}
           </span>
         )}
         {wine.varietal && <span className="text-[12px] text-text-tertiary bg-surface-raised px-2 py-1 rounded-md border border-border-subtle">{wine.varietal}</span>}
@@ -133,7 +131,6 @@ export default function WineDetail() {
         {occasionTags.map((t) => <span key={t} className="text-[11px] text-gold bg-gold-muted px-2 py-0.5 rounded-md capitalize">{t}</span>)}
       </div>
 
-      {/* Price & Score */}
       <div className="flex items-center gap-5 mb-5">
         {wine.price != null && <span className="text-xl font-bold tabular-nums">${wine.price.toFixed(2)}</span>}
         {wine.onlineRating && (
@@ -146,7 +143,6 @@ export default function WineDetail() {
         )}
       </div>
 
-      {/* Inventory */}
       <section className="bg-surface-raised rounded-xl border border-border-subtle p-4 mb-2.5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Inventory</h2>
@@ -159,7 +155,7 @@ export default function WineDetail() {
           </select>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-[12px] text-text-tertiary">Bottles</span>
+          <span className="text-[12px] text-text-tertiary">Quantity</span>
           <button onClick={() => adjustQuantity(-1)} className="w-7 h-7 rounded-md bg-surface-overlay hover:bg-surface-highlight text-text-secondary flex items-center justify-center transition-colors text-sm">−</button>
           <span className="text-[15px] font-bold tabular-nums w-6 text-center">{quantity}</span>
           <button onClick={() => adjustQuantity(1)} className="w-7 h-7 rounded-md bg-surface-overlay hover:bg-surface-highlight text-text-secondary flex items-center justify-center transition-colors text-sm">+</button>
@@ -169,12 +165,11 @@ export default function WineDetail() {
         {wine.consumedAt && <p className="text-[11px] text-text-muted mt-2">Consumed {new Date(wine.consumedAt).toLocaleDateString()}</p>}
         {quantity > 0 && wine.status === "collection" && (
           <button onClick={() => setShowConsume(true)} className="mt-3 w-full bg-gold-muted hover:bg-gold/20 text-gold border border-gold/15 py-2 rounded-lg text-[12px] font-semibold transition-all">
-            Open a bottle
+            {config.consumeVerb}
           </button>
         )}
       </section>
 
-      {/* Rating */}
       <section className="bg-surface-raised rounded-xl border border-border-subtle p-4 mb-2.5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-[11px] font-medium text-text-muted uppercase tracking-wider">Your Rating</h2>
@@ -196,10 +191,9 @@ export default function WineDetail() {
         ) : notes && <p className="text-[13px] text-text-secondary mt-2 leading-relaxed">{notes}</p>}
       </section>
 
-      {/* Food pairings */}
       {wine.foodPairings && (
         <section className="bg-surface-raised rounded-xl border border-border-subtle p-4 mb-2.5">
-          <h2 className="text-[11px] font-medium text-text-muted uppercase tracking-wider mb-2">Food Pairings</h2>
+          <h2 className="text-[11px] font-medium text-text-muted uppercase tracking-wider mb-2">{config.pairingLabel}</h2>
           <div className="flex flex-wrap gap-1.5">
             {wine.foodPairings.split(",").map((p, i) => (
               <span key={i} className="text-[11px] px-2.5 py-1 rounded-md bg-gold-muted text-gold border border-gold/10">{p.trim()}</span>
@@ -208,7 +202,6 @@ export default function WineDetail() {
         </section>
       )}
 
-      {/* Description */}
       {wine.description && (
         <section className="bg-surface-raised rounded-xl border border-border-subtle p-4 mb-2.5">
           <h2 className="text-[11px] font-medium text-text-muted uppercase tracking-wider mb-2">About</h2>
@@ -216,10 +209,9 @@ export default function WineDetail() {
         </section>
       )}
 
-      {/* Footer */}
       <div className="flex items-center justify-between mt-6 pt-4 border-t border-border-subtle">
         <p className="text-[11px] text-text-muted">Added {new Date(wine.createdAt).toLocaleDateString()}</p>
-        <button onClick={handleDelete} className="text-danger/50 hover:text-danger text-[12px] font-medium transition-colors">Delete wine</button>
+        <button onClick={handleDelete} className="text-danger/50 hover:text-danger text-[12px] font-medium transition-colors">Delete {config.itemName}</button>
       </div>
 
       {showConsume && wine && (

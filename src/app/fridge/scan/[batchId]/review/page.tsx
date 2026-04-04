@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useCategory } from "@/lib/CategoryContext";
 
 interface ScanItem {
   id: number; status: string; imageData?: string | null;
@@ -10,11 +11,10 @@ interface ScanItem {
   color?: string | null; confidence?: number | null; quantity?: number;
 }
 
-const colors = ["red", "white", "rosé", "sparkling", "dessert", "orange"];
-
 export default function ReviewPage() {
   const { batchId } = useParams();
   const router = useRouter();
+  const { config } = useCategory();
   const [items, setItems] = useState<ScanItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -71,7 +71,6 @@ export default function ReviewPage() {
     else setRejected((c) => c + 1);
 
     if (isLast) {
-      // All done
       setItems([]);
     } else {
       setCurrentIndex((i) => i + 1);
@@ -99,12 +98,12 @@ export default function ReviewPage() {
         </div>
         <h1 className="text-xl font-bold text-text-primary mb-2">Review Complete</h1>
         <p className="text-[13px] text-text-tertiary mb-1">
-          Added <span className="text-gold font-semibold">{confirmed}</span> bottle{confirmed !== 1 ? "s" : ""} to your fridge
+          Added <span className="text-gold font-semibold">{confirmed}</span> item{confirmed !== 1 ? "s" : ""} to your {config.fridgeLabel.toLowerCase()}
         </p>
         {rejected > 0 && <p className="text-[12px] text-text-muted mb-6">{rejected} skipped</p>}
         <div className="flex gap-3 justify-center mt-6">
           <button onClick={() => router.push("/fridge")} className="bg-gold/90 hover:bg-gold text-bg px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-colors">
-            View Fridge
+            View {config.fridgeLabel}
           </button>
           <button onClick={() => router.push("/fridge/scan")} className="bg-surface-raised hover:bg-surface-overlay border border-border-subtle text-text-secondary px-5 py-2.5 rounded-lg text-[13px] font-medium transition-all">
             Scan More
@@ -130,18 +129,16 @@ export default function ReviewPage() {
           Exit
         </button>
         <span className="text-[12px] text-text-tertiary tabular-nums">
-          {currentIndex + 1} of {items.length} bottles
+          {currentIndex + 1} of {items.length} items
         </span>
       </div>
 
-      {/* Progress bar */}
       <div className="bg-surface-raised rounded-full h-1 mb-5 overflow-hidden">
         <div className="bg-gold h-full rounded-full transition-all duration-300" style={{ width: `${((currentIndex + 1) / items.length) * 100}%` }} />
       </div>
 
       {/* Card */}
       <div className="bg-surface-raised rounded-xl border border-border p-4 mb-4">
-        {/* Image + confidence */}
         {current.imageData && (
           <div className="relative mb-4">
             <img src={current.imageData} alt="" className="w-full max-h-40 object-contain rounded-lg" />
@@ -153,23 +150,22 @@ export default function ReviewPage() {
           </div>
         )}
 
-        {/* Editable fields */}
         <div className="space-y-3">
           <div>
-            <label className={labelClass}>Wine name</label>
-            <input type="text" value={edits.name || ""} onChange={(e) => setEdits({ ...edits, name: e.target.value })} className={inputClass} placeholder="Wine name" />
+            <label className={labelClass}>{config.label} name</label>
+            <input type="text" value={edits.name || ""} onChange={(e) => setEdits({ ...edits, name: e.target.value })} className={inputClass} placeholder={`${config.label} name`} />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <div><label className={labelClass}>Winery</label><input type="text" value={edits.winery || ""} onChange={(e) => setEdits({ ...edits, winery: e.target.value })} className={inputClass} /></div>
-            <div><label className={labelClass}>Vintage</label><input type="text" value={edits.vintage || ""} onChange={(e) => setEdits({ ...edits, vintage: e.target.value })} className={inputClass} /></div>
+            <div><label className={labelClass}>{config.producerLabel}</label><input type="text" value={edits.winery || ""} onChange={(e) => setEdits({ ...edits, winery: e.target.value })} className={inputClass} /></div>
+            <div><label className={labelClass}>{config.vintageLabel}</label><input type="text" value={edits.vintage || ""} onChange={(e) => setEdits({ ...edits, vintage: e.target.value })} className={inputClass} /></div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <div><label className={labelClass}>Varietal</label><input type="text" value={edits.varietal || ""} onChange={(e) => setEdits({ ...edits, varietal: e.target.value })} className={inputClass} /></div>
+            <div><label className={labelClass}>{config.varietalLabel}</label><input type="text" value={edits.varietal || ""} onChange={(e) => setEdits({ ...edits, varietal: e.target.value })} className={inputClass} /></div>
             <div>
-              <label className={labelClass}>Color</label>
+              <label className={labelClass}>{config.colorLabel}</label>
               <select value={edits.color || ""} onChange={(e) => setEdits({ ...edits, color: e.target.value })} className={inputClass}>
                 <option value="">Select...</option>
-                {colors.map((c) => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                {config.types.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
           </div>
@@ -189,7 +185,7 @@ export default function ReviewPage() {
         </button>
         <button onClick={() => handleAction("confirm")}
           className="flex-[2] bg-gold/90 hover:bg-gold text-bg py-3 rounded-lg text-[13px] font-semibold transition-colors">
-          Add to Fridge
+          Add to {config.fridgeLabel}
         </button>
       </div>
     </div>

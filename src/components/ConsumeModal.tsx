@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import StarRating from "./StarRating";
+import { useCategory } from "@/lib/CategoryContext";
 
 export default function ConsumeModal({
   wine,
@@ -12,6 +13,7 @@ export default function ConsumeModal({
   onConfirm: (data: { rating?: number; notes?: string }) => void;
   onClose: () => void;
 }) {
+  const { config } = useCategory();
   const [rating, setRating] = useState(0);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -26,7 +28,7 @@ export default function ConsumeModal({
       <div className="absolute inset-0 bg-bg/80 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-surface-raised border border-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 sm:mx-4">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[15px] font-semibold text-text-primary">Open a bottle</h3>
+          <h3 className="text-[15px] font-semibold text-text-primary">{config.consumeVerb}</h3>
           <button onClick={onClose} className="text-text-muted hover:text-text-secondary text-lg leading-none">×</button>
         </div>
 
@@ -36,7 +38,7 @@ export default function ConsumeModal({
         </p>
 
         <div className="mb-4">
-          <label className="block text-[11px] text-text-muted uppercase tracking-wider font-medium mb-2">Rate this wine</label>
+          <label className="block text-[11px] text-text-muted uppercase tracking-wider font-medium mb-2">Rate this {config.itemName}</label>
           <StarRating rating={rating} onChange={setRating} size="lg" />
         </div>
 

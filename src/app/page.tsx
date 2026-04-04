@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import WineCard from "@/components/WineCard";
 import WineBottlePlaceholder from "@/components/WineBottlePlaceholder";
+import { useCategory } from "@/lib/CategoryContext";
 
 interface Wine {
   id: number;
@@ -30,7 +31,6 @@ interface QuickStats {
   totalSpent: number;
 }
 
-const colors = ["red", "white", "rosé", "sparkling", "dessert", "orange"];
 const statuses = [
   { key: "", label: "All" },
   { key: "collection", label: "Cellar" },
@@ -40,6 +40,7 @@ const statuses = [
 ];
 
 export default function Home() {
+  const { category, config } = useCategory();
   const [wines, setWines] = useState<Wine[]>([]);
   const [stats, setStats] = useState<QuickStats | null>(null);
   const [search, setSearch] = useState("");
@@ -50,13 +51,14 @@ export default function Home() {
   const [view, setView] = useState<"list" | "grid">("list");
 
   useEffect(() => {
-    fetch("/api/stats")
+    fetch(`/api/stats?category=${category}`)
       .then((r) => r.json())
       .then((data) => setStats({ total: data.total, totalBottles: data.totalBottles, inCollection: data.inCollection, avgRating: data.avgRating, totalSpent: data.totalSpent }));
-  }, []);
+  }, [category]);
 
   const fetchWines = () => {
     const params = new URLSearchParams();
+    params.set("category", category);
     if (search) params.set("search", search);
     if (colorFilter) params.set("color", colorFilter);
     if (statusFilter) params.set("status", statusFilter);
@@ -77,7 +79,10 @@ export default function Home() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(fetchWines, [search, colorFilter, statusFilter, sort]);
+  useEffect(fetchWines, [search, colorFilter, statusFilter, sort, category]);
+
+  // Reset color filter when category changes
+  useEffect(() => { setColorFilter(""); }, [category]);
 
   const handleQuickRate = async (id: number, rating: number) => {
     await fetch(`/api/wines/${id}`, {
@@ -94,9 +99,9 @@ export default function Home() {
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">All Wines</h1>
+            <h1 className="text-2xl font-bold tracking-tight">All {config.plural}</h1>
             <p className="text-[13px] text-text-tertiary mt-0.5">
-              {stats ? `${stats.total} wines · ${stats.totalBottles} bottles total` : "Loading..."}
+              {stats ? `${stats.total} ${config.itemNamePlural} · ${stats.totalBottles} total` : "Loading..."}
             </p>
           </div>
         </div>
@@ -105,7 +110,7 @@ export default function Home() {
         {stats && stats.total > 0 && (
           <div className="grid grid-cols-4 gap-2 mb-5">
             <div className="bg-surface-raised rounded-lg border border-border-subtle px-3 py-2.5">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider font-medium">Bottles</p>
+              <p className="text-[10px] text-text-muted uppercase tracking-wider font-medium">Total</p>
               <p className="text-lg font-bold tabular-nums text-text-primary">{stats.totalBottles}</p>
             </div>
             <div className="bg-surface-raised rounded-lg border border-border-subtle px-3 py-2.5">
@@ -131,7 +136,7 @@ export default function Home() {
         </svg>
         <input
           type="text"
-          placeholder="Search wines, wineries, regions..."
+          placeholder={`Search ${config.itemNamePlural}...`}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-9 pr-4 py-2 rounded-lg bg-surface-raised border border-border-subtle text-[13px] text-text-primary placeholder-text-muted focus:outline-none focus:border-gold/30 focus:ring-1 focus:ring-gold/20 transition-all"
@@ -160,28 +165,22 @@ export default function Home() {
         {/* Separator */}
         <div className="w-px h-5 bg-border flex-shrink-0" />
 
-        {/* Color pills */}
+        {/* Type pills */}
         <div className="flex gap-1 flex-shrink-0">
-          {colors.map((c) => {
-            const dotColor: Record<string, string> = {
-              red: "bg-wine-red", white: "bg-wine-white", "rosé": "bg-wine-rose",
-              sparkling: "bg-wine-sparkling", dessert: "bg-wine-dessert", orange: "bg-wine-orange",
-            };
-            return (
-              <button
-                key={c}
-                onClick={() => setColorFilter(colorFilter === c ? "" : c)}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-all capitalize ${
-                  colorFilter === c
-                    ? "bg-gold-muted text-gold ring-1 ring-gold/20"
-                    : "text-text-muted hover:text-text-tertiary hover:bg-surface-raised"
-                }`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${dotColor[c]}`} />
-                {c}
-              </button>
-            );
-          })}
+          {config.types.map((t) => (
+            <button
+              key={t.value}
+              onClick={() => setColorFilter(colorFilter === t.value ? "" : t.value)}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-all ${
+                colorFilter === t.value
+                  ? "bg-gold-muted text-gold ring-1 ring-gold/20"
+                  : "text-text-muted hover:text-text-tertiary hover:bg-surface-raised"
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: t.dotColor }} />
+              {t.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -230,7 +229,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Wine list */}
+      {/* Item list */}
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
@@ -248,16 +247,11 @@ export default function Home() {
         </div>
       ) : wines.length === 0 ? (
         <div className="text-center py-16">
-          <div className="w-16 h-16 rounded-2xl bg-gold-muted flex items-center justify-center mx-auto mb-4">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="text-gold">
-              <path d="M8 2h8l-1 9H9L8 2z" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M12 11v6" strokeLinecap="round" />
-              <path d="M8 21h8" strokeLinecap="round" />
-              <path d="M10 17h4" strokeLinecap="round" />
-            </svg>
+          <div className="w-16 h-16 rounded-2xl bg-gold-muted flex items-center justify-center mx-auto mb-4 text-3xl">
+            {config.icon}
           </div>
           <h2 className="text-lg font-semibold text-text-primary mb-1">Your collection is empty</h2>
-          <p className="text-[13px] text-text-tertiary mb-5">Add your first bottle to get started</p>
+          <p className="text-[13px] text-text-tertiary mb-5">Add your first {config.itemName} to get started</p>
           <a
             href="/add"
             className="inline-flex items-center gap-2 bg-gold/90 hover:bg-gold text-bg px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-colors"
@@ -265,7 +259,7 @@ export default function Home() {
             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
-            Add Wine
+            Add {config.label}
           </a>
         </div>
       ) : view === "grid" ? (

@@ -2,15 +2,7 @@
 
 import StarRating from "./StarRating";
 import WineBottlePlaceholder from "./WineBottlePlaceholder";
-
-const colorDot: Record<string, string> = {
-  red: "bg-wine-red",
-  white: "bg-wine-white",
-  "rosé": "bg-wine-rose",
-  sparkling: "bg-wine-sparkling",
-  dessert: "bg-wine-dessert",
-  orange: "bg-wine-orange",
-};
+import { useCategory } from "@/lib/CategoryContext";
 
 interface Wine {
   id: number;
@@ -37,6 +29,10 @@ export default function WineCard({
   wine: Wine;
   onQuickRate?: (id: number, rating: number) => void;
 }) {
+  const { config } = useCategory();
+  const typeEntry = config.types.find((t) => t.value === wine.color);
+  const dotColor = typeEntry?.dotColor || "#4a4640";
+
   return (
     <div className="group relative bg-surface-raised hover:bg-surface-overlay rounded-xl border border-border-subtle hover:border-border transition-all duration-200">
       <a href={`/wine/${wine.id}`} className="flex gap-3.5 p-3.5">
@@ -80,7 +76,7 @@ export default function WineCard({
           <div className="flex items-center justify-between mt-2">
             <div className="flex items-center gap-2">
               {wine.color && (
-                <span className={`w-2 h-2 rounded-full ${colorDot[wine.color] || "bg-surface-highlight"}`} title={wine.color} />
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: dotColor }} title={wine.color} />
               )}
               {wine.varietal && (
                 <span className="text-[11px] text-text-tertiary">{wine.varietal}</span>

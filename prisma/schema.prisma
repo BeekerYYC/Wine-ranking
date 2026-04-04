@@ -16,7 +16,8 @@ model Wine {
   varietal      String?
   region        String?
   country       String?
-  color         String?  // red, white, rosé, sparkling, dessert, orange
+  category      String   @default("wine") // wine, coffee, beer
+  color         String?  // wine: red/white/rosé/sparkling/dessert/orange, coffee: light/medium/dark, beer: ipa/lager/stout etc
   price         Float?
   rating        Int?     // 1-5
   notes         String?
@@ -39,6 +40,7 @@ model Wine {
 
 model ScanBatch {
   id          Int         @id @default(autoincrement())
+  category    String      @default("wine") // wine, coffee, beer
   status      String      @default("processing") // processing, reviewing, completed
   totalPhotos Int         @default(0)
   processed   Int         @default(0)
@@ -65,7 +67,7 @@ model ScanItem {
   foodPairings String?
   onlineRating Float?
   confidence   Float?
-  quantity     Int        @default(1) // how many bottles of this wine detected
+  quantity     Int        @default(1) // how many of this item detected
   wineId       Int?       // set when confirmed and saved as Wine
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt

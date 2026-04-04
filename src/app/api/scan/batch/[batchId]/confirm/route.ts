@@ -18,6 +18,10 @@ export async function POST(
   const { batchId } = await params;
   const { items } = (await req.json()) as { items: ConfirmItem[] };
 
+  // Get batch category
+  const batch = await prisma.scanBatch.findUnique({ where: { id: parseInt(batchId) } });
+  const category = batch?.category || "wine";
+
   const results = [];
 
   for (const item of items) {
@@ -33,14 +37,15 @@ export async function POST(
       });
       results.push({ scanItemId: item.scanItemId, action: "rejected" });
     } else {
-      const wineName = item.edits?.name || scanItem.name || "Unknown Wine";
+      const wineName = item.edits?.name || scanItem.name || "Unknown";
       const wineVintage = item.edits?.vintage ?? scanItem.vintage;
       const wineWinery = item.edits?.winery ?? scanItem.winery;
       const addQty = item.edits?.quantity ?? scanItem.quantity ?? 1;
 
-      // Check for existing wine with same name + vintage (+ winery if available)
+      // Check for existing item with same name + vintage (+ producer if available)
       const existingWhere: Record<string, unknown> = {
         name: { equals: wineName, mode: "insensitive" },
+        category,
         status: "collection",
       };
       if (wineVintage) existingWhere.vintage = wineVintage;
@@ -49,7 +54,6 @@ export async function POST(
       const existing = await prisma.wine.findFirst({ where: existingWhere });
 
       if (existing) {
-        // Duplicate found — increment quantity
         const wine = await prisma.wine.update({
           where: { id: existing.id },
           data: { quantity: existing.quantity + addQty },
@@ -62,10 +66,10 @@ export async function POST(
 
         results.push({ scanItemId: item.scanItemId, action: "merged", wineId: wine.id, addedQty: addQty });
       } else {
-        // New wine — create
         const wine = await prisma.wine.create({
           data: {
             name: wineName,
+            category,
             winery: wineWinery,
             vintage: wineVintage,
             varietal: item.edits?.varietal ?? scanItem.varietal,
@@ -93,7 +97,6 @@ export async function POST(
     }
   }
 
-  // Check if all items in batch are processed
   const remaining = await prisma.scanItem.count({
     where: { batchId: parseInt(batchId), status: "analyzed" },
   });

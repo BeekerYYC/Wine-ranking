@@ -1,21 +1,23 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useCategory } from "@/lib/CategoryContext";
 
 interface Message { role: "user" | "assistant"; content: string; }
 
-const quickActions = [
-  { type: "link", href: "/fridge/drink", label: "What should I drink?", sub: "Get an AI pick from your fridge based on mood or food", icon: "🧊" },
-  { type: "recommend", label: "General wine recommendation", sub: "Get a recommendation from your full collection", icon: "🍷" },
-  { type: "pairing", label: "Food pairing help", sub: "Find the right wine for your meal", icon: "🍽" },
-  { type: "insights", label: "Analyze my palate", sub: "Discover your taste patterns", icon: "✨" },
-];
-
 export default function SommelierPage() {
+  const { category, config } = useCategory();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const quickActions = [
+    { type: "link", href: "/fridge/drink", label: config.drinkPrompt, sub: `Get an AI pick from your ${config.fridgeLabel.toLowerCase()} based on mood or food`, icon: config.icon },
+    { type: "recommend", label: `General ${config.itemName} recommendation`, sub: `Get a recommendation from your full collection`, icon: config.icon },
+    { type: "pairing", label: `${config.pairingLabel.toLowerCase()} help`, sub: `Find the right ${config.itemName} for your meal`, icon: "🍽" },
+    { type: "insights", label: "Analyze my palate", sub: "Discover your taste patterns", icon: "✨" },
+  ];
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -26,7 +28,7 @@ export default function SommelierPage() {
     setInput("");
     setLoading(true);
     try {
-      const res = await fetch("/api/sommelier", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message, type }) });
+      const res = await fetch("/api/sommelier", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message, type, category }) });
       const data = await res.json();
       setMessages((prev) => [...prev, { role: "assistant", content: data.error ? `Error: ${data.error}` : data.response }]);
     } catch {
@@ -37,8 +39,8 @@ export default function SommelierPage() {
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 120px)" }}>
       <div className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight">Sommelier</h1>
-        <p className="text-[13px] text-text-tertiary mt-0.5">AI wine expert with knowledge of your collection</p>
+        <h1 className="text-2xl font-bold tracking-tight">{config.sommelierLabel}</h1>
+        <p className="text-[13px] text-text-tertiary mt-0.5">AI {config.itemName} expert with knowledge of your collection</p>
       </div>
 
       {messages.length === 0 && (
@@ -96,7 +98,7 @@ export default function SommelierPage() {
       <div className="flex gap-2">
         <input type="text" value={input} onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !loading && send(input)}
-          placeholder="Ask about wine..."
+          placeholder={`Ask about ${config.itemNamePlural}...`}
           className="flex-1 px-3.5 py-2.5 rounded-lg bg-surface-raised border border-border-subtle text-[13px] text-text-primary placeholder-text-muted focus:outline-none focus:border-gold/30 focus:ring-1 focus:ring-gold/20 transition-all"
           disabled={loading} />
         <button onClick={() => send(input)} disabled={loading || !input.trim()}

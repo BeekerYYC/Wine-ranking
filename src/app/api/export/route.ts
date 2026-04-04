@@ -1,15 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const category = req.nextUrl.searchParams.get("category") || "wine";
+
   const wines = await prisma.wine.findMany({
+    where: { category },
     include: { store: true, list: true },
     orderBy: { createdAt: "desc" },
   });
 
   const headers = [
-    "Name", "Winery", "Vintage", "Varietal", "Region", "Country",
-    "Color", "Price", "Rating", "Quantity", "Status", "Store",
+    "Name", "Producer", "Vintage", "Type", "Region", "Country",
+    "Category", "Price", "Rating", "Quantity", "Status", "Store",
     "List", "Occasion", "Notes", "Description", "Date Added", "Date Consumed",
   ];
 
@@ -42,7 +45,7 @@ export async function GET() {
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv",
-      "Content-Disposition": `attachment; filename="wine-collection-${new Date().toISOString().split("T")[0]}.csv"`,
+      "Content-Disposition": `attachment; filename="${category}-collection-${new Date().toISOString().split("T")[0]}.csv"`,
     },
   });
 }
