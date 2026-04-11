@@ -8,7 +8,7 @@ export async function GET(
   const { id } = await params;
   const wine = await prisma.wine.findUnique({
     where: { id: parseInt(id) },
-    include: { store: true, list: true },
+    include: { store: true, list: true, consumptions: { orderBy: { createdAt: "desc" } } },
   });
   if (!wine) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(wine);
@@ -47,6 +47,9 @@ export async function PUT(
     rating: body.rating ? parseInt(body.rating) : null,
     notes: body.notes || null,
     description: body.description || null,
+    tastingNotes: body.tastingNotes !== undefined ? (body.tastingNotes || null) : undefined,
+    drinkingWindow: body.drinkingWindow !== undefined ? (body.drinkingWindow || null) : undefined,
+    criticReviews: body.criticReviews !== undefined ? (body.criticReviews || null) : undefined,
     imageData: body.imageData || null,
     quantity: body.quantity != null ? parseInt(body.quantity) : undefined,
     status: body.status || undefined,

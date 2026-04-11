@@ -24,10 +24,20 @@ export async function POST(
     data.consumedAt = new Date();
   }
 
-  const updated = await prisma.wine.update({
-    where: { id: parseInt(id) },
-    data,
-  });
+  const [updated] = await prisma.$transaction([
+    prisma.wine.update({
+      where: { id: parseInt(id) },
+      data,
+    }),
+    // Log every individual bottle consumption
+    prisma.consumptionLog.create({
+      data: {
+        wineId: parseInt(id),
+        rating: body.rating || null,
+        notes: body.notes || null,
+      },
+    }),
+  ]);
 
   return NextResponse.json(updated);
 }

@@ -22,6 +22,9 @@ model Wine {
   rating        Int?     // 1-5
   notes         String?
   description   String?  // LLM-generated description/info
+  tastingNotes  String?  // detailed tasting profile: aroma, palate, finish
+  drinkingWindow String? // e.g. "2024-2030"
+  criticReviews String?  // notable critic scores/reviews
   imageData     String?  // base64 encoded image
   quantity      Int      @default(1)
   status        String   @default("collection") // collection, wishlist, consumed, restaurant
@@ -34,6 +37,7 @@ model Wine {
   listId        Int?
   list          WineList? @relation(fields: [listId], references: [id])
   consumedAt    DateTime? // when marked consumed
+  consumptions  ConsumptionLog[]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -84,6 +88,15 @@ model WineList {
   id        Int      @id @default(autoincrement())
   name      String   @unique
   wines     Wine[]
+  createdAt DateTime @default(now())
+}
+
+model ConsumptionLog {
+  id        Int      @id @default(autoincrement())
+  wineId    Int
+  wine      Wine     @relation(fields: [wineId], references: [id], onDelete: Cascade)
+  rating    Int?     // optional rating for this specific bottle
+  notes     String?
   createdAt DateTime @default(now())
 }
 

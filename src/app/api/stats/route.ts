@@ -6,6 +6,15 @@ export async function GET(req: NextRequest) {
 
   const wines = await prisma.wine.findMany({ where: { category } });
 
+  // Get all consumption logs for wines in this category
+  const wineIds = wines.map((w) => w.id);
+  const consumptionLogs = wineIds.length > 0
+    ? await prisma.consumptionLog.findMany({
+        where: { wineId: { in: wineIds } },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+
   const total = wines.length;
   const rated = wines.filter((w) => w.rating);
   const avgRating = rated.length
@@ -18,9 +27,12 @@ export async function GET(req: NextRequest) {
     : 0;
   const totalSpent = withPrice.reduce((sum, w) => sum + (w.price || 0) * w.quantity, 0);
 
-  const totalBottles = wines.reduce((sum, w) => sum + w.quantity, 0);
+  // Bottles consumed = number of consumption log entries (each = 1 bottle opened)
+  const bottlesConsumed = consumptionLogs.length;
+  const totalBottles = wines.reduce((sum, w) => sum + w.quantity, 0) + bottlesConsumed;
   const inCollection = wines.filter((w) => w.status === "collection").reduce((sum, w) => sum + w.quantity, 0);
-  const consumed = wines.filter((w) => w.status === "consumed").length;
+  const consumed = bottlesConsumed;
+  const consumedWines = wines.filter((w) => w.status === "consumed").length;
   const wishlist = wines.filter((w) => w.status === "wishlist").length;
 
   const varietalMap: Record<string, number> = {};
@@ -51,11 +63,10 @@ export async function GET(req: NextRequest) {
     .filter((w) => w.price && w.rating)
     .map((w) => ({ name: w.name, price: w.price, rating: w.rating }));
 
-  // Average days between consuming bottles (based on consumedAt dates)
-  const consumedDates = wines
-    .filter((w) => w.consumedAt)
-    .map((w) => new Date(w.consumedAt!).getTime())
-    .sort((a, b) => a - b);
+  // Average days between consuming bottles (based on consumption log dates)
+  const consumedDates = consumptionLogs.length > 0
+    ? consumptionLogs.map((l) => new Date(l.createdAt).getTime()).sort((a, b) => a - b)
+    : wines.filter((w) => w.consumedAt).map((w) => new Date(w.consumedAt!).getTime()).sort((a, b) => a - b);
   let avgDaysBetween = 0;
   if (consumedDates.length >= 2) {
     const gaps = [];
@@ -107,7 +118,7 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json({
-    total, totalBottles, inCollection, consumed, wishlist,
+    total, totalBottles, inCollection, consumed, consumedWines, wishlist,
     avgRating: Math.round(avgRating * 10) / 10,
     avgPrice: Math.round(avgPrice * 100) / 100,
     totalSpent: Math.round(totalSpent * 100) / 100,

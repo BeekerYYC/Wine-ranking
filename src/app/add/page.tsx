@@ -29,6 +29,7 @@ export default function AddWine() {
     color: "", price: "", rating: 0, notes: "", description: "", quantity: "1",
     status: "collection", storeName: "", occasion: [] as string[],
     foodPairings: "", onlineRating: "", confidence: "", listId: "",
+    tastingNotes: "", drinkingWindow: "", criticReviews: "",
   });
 
   useEffect(() => {
@@ -60,6 +61,9 @@ export default function AddWine() {
         foodPairings: info.foodPairings || f.foodPairings,
         onlineRating: info.onlineRating?.toString() || f.onlineRating,
         confidence: info.confidence?.toString() || f.confidence,
+        tastingNotes: info.tastingNotes || f.tastingNotes,
+        drinkingWindow: info.drinkingWindow || f.drinkingWindow,
+        criticReviews: info.criticReviews || f.criticReviews,
       }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analysis failed");
@@ -239,6 +243,24 @@ export default function AddWine() {
               <div className="flex items-center gap-3">
                 <span className="text-[11px] text-text-muted">Est. Score</span>
                 <span className="text-lg font-bold text-gold tabular-nums">{form.onlineRating}<span className="text-[11px] text-text-tertiary font-normal">/100</span></span>
+              </div>
+            )}
+            {form.criticReviews && (
+              <div>
+                <p className="text-[11px] text-text-muted mb-1">Critic Reviews</p>
+                <p className="text-[12px] text-text-secondary leading-relaxed">{form.criticReviews}</p>
+              </div>
+            )}
+            {form.tastingNotes && (
+              <div>
+                <p className="text-[11px] text-text-muted mb-1">Tasting Profile</p>
+                <p className="text-[12px] text-text-secondary leading-relaxed">{form.tastingNotes}</p>
+              </div>
+            )}
+            {form.drinkingWindow && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-text-muted">Drink Window</span>
+                <span className="text-[12px] text-text-secondary font-medium">{form.drinkingWindow}</span>
               </div>
             )}
             {form.foodPairings && (
