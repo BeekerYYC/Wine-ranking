@@ -124,7 +124,7 @@ export default function Dashboard() {
         <Stat label="Total spent" value={`$${stats.totalSpent.toLocaleString()}`} />
         <Stat label="Consumed" value={stats.consumed} />
         <Stat label="Wishlist" value={stats.wishlist} />
-        <Stat label="Pace" value={stats.avgDaysBetween > 0 ? `${stats.avgDaysBetween}d` : "—"} sub="between additions" />
+        <Stat label="Pace" value={stats.avgDaysBetween > 0 ? `${Math.round(stats.avgDaysBetween)}d` : "—"} sub="between bottles" />
       </div>
 
       <div className="bg-surface-raised rounded-xl border border-border-subtle p-4">

@@ -51,14 +51,18 @@ export async function GET(req: NextRequest) {
     .filter((w) => w.price && w.rating)
     .map((w) => ({ name: w.name, price: w.price, rating: w.rating }));
 
-  const sorted = [...wines].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  );
+  // Average days between consuming bottles (based on consumedAt dates)
+  const consumedDates = wines
+    .filter((w) => w.consumedAt)
+    .map((w) => new Date(w.consumedAt!).getTime())
+    .sort((a, b) => a - b);
   let avgDaysBetween = 0;
-  if (sorted.length >= 2) {
-    const first = new Date(sorted[0].createdAt).getTime();
-    const last = new Date(sorted[sorted.length - 1].createdAt).getTime();
-    avgDaysBetween = (last - first) / (1000 * 60 * 60 * 24) / (sorted.length - 1);
+  if (consumedDates.length >= 2) {
+    const gaps = [];
+    for (let i = 1; i < consumedDates.length; i++) {
+      gaps.push((consumedDates[i] - consumedDates[i - 1]) / (1000 * 60 * 60 * 24));
+    }
+    avgDaysBetween = gaps.reduce((sum, g) => sum + g, 0) / gaps.length;
   }
 
   const monthlyMap: Record<string, number> = {};

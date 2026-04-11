@@ -19,6 +19,7 @@ interface Wine {
   quantity?: number;
   status?: string;
   onlineRating?: number | null;
+  consumedAt?: string | null;
   imageData?: string | null;
   createdAt: string;
 }

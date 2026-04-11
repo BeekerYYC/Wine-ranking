@@ -2,7 +2,6 @@
 
 import { usePathname } from "next/navigation";
 import { useCategory } from "@/lib/CategoryContext";
-import { CATEGORY_LIST } from "@/lib/categories";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -77,25 +76,6 @@ export default function Sidebar() {
           <span className="text-[15px] font-semibold text-text-primary tracking-tight">{config.label} Ranker</span>
         </div>
 
-        {/* Category toggle */}
-        <div className="px-3 pt-3 pb-1">
-          <div className="flex gap-0.5 bg-surface-raised rounded-lg p-0.5 border border-border-subtle">
-            {CATEGORY_LIST.map((c) => (
-              <button
-                key={c}
-                onClick={() => setCategory(c)}
-                className={`flex-1 flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-md text-[11px] font-medium transition-all ${
-                  category === c
-                    ? "bg-surface-overlay text-text-primary shadow-sm"
-                    : "text-text-muted hover:text-text-tertiary"
-                }`}
-              >
-                <span className="text-sm">{CATEGORY_LIST.indexOf(c) === 0 ? "🍷" : CATEGORY_LIST.indexOf(c) === 1 ? "☕" : "🍺"}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Add button */}
         <div className="px-3 pt-3 pb-2">
           <a
@@ -148,20 +128,7 @@ export default function Sidebar() {
       {/* Mobile bottom bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur-xl border-t border-border z-50 safe-area-bottom">
         <div className="flex items-center justify-around h-14">
-          {/* Category toggle in mobile */}
-          {CATEGORY_LIST.map((c) => (
-            <button
-              key={c}
-              onClick={() => setCategory(c)}
-              className={`flex flex-col items-center gap-0.5 px-2 py-1 transition-colors ${
-                category === c ? "text-gold" : "text-text-muted"
-              }`}
-            >
-              <span className="text-lg">{c === "wine" ? "🍷" : c === "coffee" ? "☕" : "🍺"}</span>
-              <span className="text-[9px] font-medium capitalize">{c}</span>
-            </button>
-          ))}
-          {nav.filter((item) => ["/", "/fridge", "/dashboard"].includes(item.href)).map((item) => {
+          {nav.filter((item) => ["/", "/fridge", "/dashboard", "/sommelier"].includes(item.href)).map((item) => {
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             return (
               <a

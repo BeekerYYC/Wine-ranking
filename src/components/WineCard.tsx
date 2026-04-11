@@ -19,6 +19,7 @@ interface Wine {
   status?: string;
   onlineRating?: number | null;
   confidence?: number | null;
+  consumedAt?: string | null;
   imageData?: string | null;
 }
 
@@ -84,6 +85,11 @@ export default function WineCard({
               {wine.status && wine.status !== "collection" && (
                 <span className="text-[10px] uppercase tracking-wider text-gold font-medium bg-gold-muted px-1.5 py-0.5 rounded">
                   {wine.status}
+                </span>
+              )}
+              {wine.consumedAt && (
+                <span className="text-[10px] text-text-muted tabular-nums">
+                  {new Date(wine.consumedAt).toLocaleDateString()}
                 </span>
               )}
               {(wine.quantity ?? 0) > 1 && (
