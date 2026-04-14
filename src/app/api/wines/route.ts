@@ -10,20 +10,34 @@ export async function GET(req: NextRequest) {
   const sort = req.nextUrl.searchParams.get("sort") || "createdAt";
   const order = req.nextUrl.searchParams.get("order") || "desc";
 
-  const where: Record<string, unknown> = { category };
+  const conditions: Record<string, unknown>[] = [{ category }];
 
   if (search) {
-    where.OR = [
-      { name: { contains: search, mode: "insensitive" } },
-      { winery: { contains: search, mode: "insensitive" } },
-      { varietal: { contains: search, mode: "insensitive" } },
-      { region: { contains: search, mode: "insensitive" } },
-    ];
+    conditions.push({
+      OR: [
+        { name: { contains: search, mode: "insensitive" } },
+        { winery: { contains: search, mode: "insensitive" } },
+        { varietal: { contains: search, mode: "insensitive" } },
+        { region: { contains: search, mode: "insensitive" } },
+      ],
+    });
   }
 
-  if (color) where.color = color;
-  if (status) where.status = status;
-  if (listId) where.listId = parseInt(listId);
+  if (color) conditions.push({ color });
+  if (status === "consumed") {
+    // Show all wines that have ever been opened (consumedAt set) OR fully consumed
+    conditions.push({
+      OR: [
+        { status: "consumed" },
+        { consumedAt: { not: null } },
+      ],
+    });
+  } else if (status) {
+    conditions.push({ status });
+  }
+  if (listId) conditions.push({ listId: parseInt(listId) });
+
+  const where = { AND: conditions };
 
   const wines = await prisma.wine.findMany({
     where,

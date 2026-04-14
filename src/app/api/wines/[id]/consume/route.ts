@@ -14,22 +14,37 @@ export async function POST(
   }
 
   const newQuantity = Math.max(0, wine.quantity - 1);
-  const data: Record<string, unknown> = { quantity: newQuantity };
+  const data: Record<string, unknown> = {
+    quantity: newQuantity,
+    consumedAt: new Date(), // Always track when a bottle was opened
+  };
 
   if (body.rating) data.rating = body.rating;
   if (body.notes) data.notes = body.notes;
 
   if (newQuantity === 0) {
     data.status = "consumed";
-    data.consumedAt = new Date();
   }
 
   const [updated] = await prisma.$transaction([
+    // Auto-mark any other wines with quantity 0 still in "collection" as consumed
+    // (the user opened a new bottle, so any previous empties are clearly consumed)
+    prisma.wine.updateMany({
+      where: {
+        category: wine.category,
+        quantity: 0,
+        status: "collection",
+        id: { not: parseInt(id) },
+      },
+      data: {
+        status: "consumed",
+        consumedAt: new Date(),
+      },
+    }),
     prisma.wine.update({
       where: { id: parseInt(id) },
       data,
     }),
-    // Log every individual bottle consumption
     prisma.consumptionLog.create({
       data: {
         wineId: parseInt(id),
@@ -39,5 +54,12 @@ export async function POST(
     }),
   ]);
 
-  return NextResponse.json(updated);
+  // updated is now the result of updateMany (first in array), we need the wine update
+  // $transaction returns results in order, so index 1 is the wine update
+  const updatedWine = await prisma.wine.findUnique({
+    where: { id: parseInt(id) },
+    include: { store: true, list: true },
+  });
+
+  return NextResponse.json(updatedWine);
 }

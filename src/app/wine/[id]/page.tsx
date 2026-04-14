@@ -187,8 +187,8 @@ export default function WineDetail() {
         </div>
         {wine.store && <p className="text-[11px] text-text-muted mt-3">Purchased at <span className="text-text-tertiary">{wine.store.name}</span></p>}
         {wine.list && <p className="text-[11px] text-text-muted mt-1">List: <span className="text-text-tertiary">{wine.list.name}</span></p>}
-        {wine.consumedAt && <p className="text-[11px] text-text-muted mt-2">Consumed {new Date(wine.consumedAt).toLocaleDateString()}</p>}
-        {quantity > 0 && wine.status === "collection" && (
+        {wine.consumedAt && <p className="text-[11px] text-text-muted mt-2">Last opened {new Date(wine.consumedAt).toLocaleDateString()}</p>}
+        {quantity > 0 && wine.status !== "consumed" && (
           <button onClick={() => setShowConsume(true)} className="mt-3 w-full bg-gold-muted hover:bg-gold/20 text-gold border border-gold/15 py-2 rounded-lg text-[12px] font-semibold transition-all">
             {config.consumeVerb}
           </button>

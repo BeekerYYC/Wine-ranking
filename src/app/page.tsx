@@ -94,6 +94,22 @@ export default function Home() {
     setWines((prev) => prev.map((w) => (w.id === id ? { ...w, rating } : w)));
   };
 
+  const handleQuickConsume = async (id: number) => {
+    const res = await fetch(`/api/wines/${id}/consume`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setWines((prev) => prev.map((w) => (w.id === id ? { ...w, quantity: updated.quantity, status: updated.status, consumedAt: updated.consumedAt } : w)));
+      // Refresh stats
+      fetch(`/api/stats?category=${category}`)
+        .then((r) => r.json())
+        .then((data) => setStats({ total: data.total, totalBottles: data.totalBottles, inCollection: data.inCollection, avgRating: data.avgRating, totalSpent: data.totalSpent }));
+    }
+  };
+
   return (
     <div>
       {/* Page header with stats */}
@@ -290,7 +306,7 @@ export default function Home() {
       ) : (
         <div className="space-y-1.5">
           {wines.map((wine) => (
-            <WineCard key={wine.id} wine={wine} onQuickRate={handleQuickRate} />
+            <WineCard key={wine.id} wine={wine} onQuickRate={handleQuickRate} onQuickConsume={handleQuickConsume} />
           ))}
         </div>
       )}

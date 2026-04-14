@@ -25,14 +25,31 @@ export async function GET(req: NextRequest) {
   const avgPrice = withPrice.length
     ? withPrice.reduce((sum, w) => sum + (w.price || 0), 0) / withPrice.length
     : 0;
-  const totalSpent = withPrice.reduce((sum, w) => sum + (w.price || 0) * w.quantity, 0);
 
-  // Bottles consumed = number of consumption log entries (each = 1 bottle opened)
-  const bottlesConsumed = consumptionLogs.length;
-  const totalBottles = wines.reduce((sum, w) => sum + w.quantity, 0) + bottlesConsumed;
+  // Count bottles consumed from logs, but fall back to counting wines with
+  // consumedAt or status=consumed for backward compatibility (pre-logging data)
+  const bottlesConsumed = consumptionLogs.length > 0
+    ? consumptionLogs.length
+    : wines.filter((w) => w.consumedAt || w.status === "consumed").length;
+  const winesEverOpened = wines.filter((w) => w.consumedAt || w.status === "consumed").length;
+
+  // totalSpent = price * (remaining qty + bottles consumed from this wine)
+  // For wines with logs, use log count; for legacy consumed wines, add 1 (the consumed bottle)
+  const totalSpent = wines.reduce((sum, w) => {
+    if (!w.price) return sum;
+    const logsForWine = consumptionLogs.filter((l) => l.wineId === w.id).length;
+    const totalQty = w.quantity + (logsForWine > 0 ? logsForWine : (w.status === "consumed" ? 1 : 0));
+    return sum + (w.price || 0) * totalQty;
+  }, 0);
+
+  const totalBottles = wines.reduce((sum, w) => sum + w.quantity, 0) + (
+    consumptionLogs.length > 0
+      ? consumptionLogs.length
+      : wines.filter((w) => w.status === "consumed").reduce((sum, w) => sum + 1, 0)
+  );
   const inCollection = wines.filter((w) => w.status === "collection").reduce((sum, w) => sum + w.quantity, 0);
   const consumed = bottlesConsumed;
-  const consumedWines = wines.filter((w) => w.status === "consumed").length;
+  const consumedWines = winesEverOpened;
   const wishlist = wines.filter((w) => w.status === "wishlist").length;
 
   const varietalMap: Record<string, number> = {};

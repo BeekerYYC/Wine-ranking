@@ -26,9 +26,11 @@ interface Wine {
 export default function WineCard({
   wine,
   onQuickRate,
+  onQuickConsume,
 }: {
   wine: Wine;
   onQuickRate?: (id: number, rating: number) => void;
+  onQuickConsume?: (id: number) => void;
 }) {
   const { config } = useCategory();
   const typeEntry = config.types.find((t) => t.value === wine.color);
@@ -118,15 +120,29 @@ export default function WineCard({
         </div>
       </a>
 
-      {/* Quick rate strip */}
-      {onQuickRate && (
+      {/* Quick actions strip */}
+      {(onQuickRate || onQuickConsume) && (
         <div className="border-t border-border-subtle px-3.5 py-1.5 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-          <span className="text-[11px] text-text-muted">Quick rate</span>
-          <StarRating
-            rating={wine.rating || 0}
-            size="sm"
-            onChange={(r) => onQuickRate(wine.id, r)}
-          />
+          {onQuickConsume && (wine.quantity ?? 0) > 0 && wine.status !== "consumed" ? (
+            <button
+              onClick={(e) => { e.preventDefault(); onQuickConsume(wine.id); }}
+              className="text-[11px] text-gold hover:text-gold-light font-medium transition-colors flex items-center gap-1"
+            >
+              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Drank this
+            </button>
+          ) : (
+            <span className="text-[11px] text-text-muted">Quick rate</span>
+          )}
+          {onQuickRate && (
+            <StarRating
+              rating={wine.rating || 0}
+              size="sm"
+              onChange={(r) => onQuickRate(wine.id, r)}
+            />
+          )}
         </div>
       )}
     </div>

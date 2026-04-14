@@ -42,7 +42,10 @@ export default function Dashboard() {
   useEffect(() => {
     setStats(null);
     setEnrichResult(null);
-    fetch(`/api/stats?category=${category}`).then((r) => r.json()).then(setStats);
+    // Auto-fix wines stuck at quantity 0 with "collection" status
+    fetch("/api/wines/fix-consumed", { method: "POST" }).then(() => {
+      fetch(`/api/stats?category=${category}`).then((r) => r.json()).then(setStats);
+    });
   }, [category]);
 
   const handleEnrichAll = async (force = false) => {
