@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import WineCard from "@/components/WineCard";
-import WineBottlePlaceholder from "@/components/WineBottlePlaceholder";
 import { useCategory } from "@/lib/CategoryContext";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from "recharts";
 
 interface Wine {
   id: number;
@@ -14,313 +13,352 @@ interface Wine {
   region?: string | null;
   country?: string | null;
   color?: string | null;
-  price?: number | null;
   rating?: number | null;
-  quantity?: number;
-  status?: string;
   onlineRating?: number | null;
-  consumedAt?: string | null;
   imageData?: string | null;
   labelImageUrl?: string | null;
+  tastingNotes?: string | null;
+  criticReviews?: string | null;
   createdAt: string;
 }
 
-interface QuickStats {
+interface Stats {
   total: number;
   totalBottles: number;
   inCollection: number;
+  consumed: number;
+  consumedBottles: number;
+  avgDaysBetween: number;
   avgRating: number;
   totalSpent: number;
+  uniqueRegions: number;
+  uniqueCountries: number;
+  countryBreakdown: { name: string; count: number }[];
+  monthlyAdditions: { month: string; count: number }[];
 }
 
-const statuses = [
-  { key: "", label: "All" },
-  { key: "collection", label: "Cellar" },
-  { key: "wishlist", label: "Wishlist" },
-  { key: "consumed", label: "Consumed" },
-  { key: "restaurant", label: "Restaurant" },
-];
+const REGION_COLORS = ["#b73a5e", "#e0617e", "#d4849a", "#c2185b", "#8a3f5a", "#6b2d40"];
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
 
 export default function Home() {
-  const { category, config } = useCategory();
+  const { config } = useCategory();
   const [wines, setWines] = useState<Wine[]>([]);
-  const [stats, setStats] = useState<QuickStats | null>(null);
-  const [search, setSearch] = useState("");
-  const [colorFilter, setColorFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [sort, setSort] = useState("createdAt");
-  const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"list" | "grid">("list");
+  const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => {
-    fetch(`/api/stats?category=${category}`)
+    fetch(`/api/wines?sort=createdAt&order=desc`)
       .then((r) => r.json())
-      .then((data) => setStats({ total: data.total, totalBottles: data.totalBottles, inCollection: data.inCollection, avgRating: data.avgRating, totalSpent: data.totalSpent }));
-  }, [category]);
-
-  const fetchWines = () => {
-    const params = new URLSearchParams();
-    params.set("category", category);
-    if (search) params.set("search", search);
-    if (colorFilter) params.set("color", colorFilter);
-    if (statusFilter) params.set("status", statusFilter);
-    const sortMap: Record<string, [string, string]> = {
-      rating: ["rating", "desc"],
-      price: ["price", "asc"],
-      name: ["name", "asc"],
-      createdAt: ["createdAt", "desc"],
-    };
-    const [s, o] = sortMap[sort] || sortMap.createdAt;
-    params.set("sort", s);
-    params.set("order", o);
-
-    setLoading(true);
-    fetch(`/api/wines?${params}`)
+      .then((data: Wine[]) => setWines(data.slice(0, 8)));
+    fetch(`/api/stats`)
       .then((r) => r.json())
-      .then(setWines)
-      .finally(() => setLoading(false));
-  };
+      .then(setStats);
+  }, []);
 
-  useEffect(fetchWines, [search, colorFilter, statusFilter, sort, category]);
+  const recentEnriched = wines.filter((w) => w.tastingNotes || w.criticReviews).slice(0, 6);
+  const newThisWeek = wines.filter((w) => {
+    const d = new Date(w.createdAt).getTime();
+    return Date.now() - d < 7 * 24 * 60 * 60 * 1000;
+  }).length;
 
-  // Reset color filter when category changes
-  useEffect(() => { setColorFilter(""); }, [category]);
+  // Build top regions/countries data
+  const topCountries = stats?.countryBreakdown?.slice(0, 5) || [];
+  const totalCountryCount = topCountries.reduce((s, c) => s + c.count, 0);
+  const otherCount = (stats?.total || 0) - totalCountryCount;
+  const pieData = otherCount > 0
+    ? [...topCountries, { name: "Others", count: otherCount }]
+    : topCountries;
 
-  const handleQuickRate = async (id: number, rating: number) => {
-    await fetch(`/api/wines/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rating }),
-    });
-    setWines((prev) => prev.map((w) => (w.id === id ? { ...w, rating } : w)));
-  };
-
-  const handleQuickConsume = async (id: number) => {
-    const res = await fetch(`/api/wines/${id}/consume`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    if (res.ok) {
-      const updated = await res.json();
-      setWines((prev) => prev.map((w) => (w.id === id ? { ...w, quantity: updated.quantity, status: updated.status, consumedAt: updated.consumedAt } : w)));
-      // Refresh stats
-      fetch(`/api/stats?category=${category}`)
-        .then((r) => r.json())
-        .then((data) => setStats({ total: data.total, totalBottles: data.totalBottles, inCollection: data.inCollection, avgRating: data.avgRating, totalSpent: data.totalSpent }));
-    }
-  };
+  // Last 6 months consumption
+  const monthlyData = stats?.monthlyAdditions?.slice(-6) || [];
 
   return (
-    <div>
-      {/* Page header with stats */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">All {config.plural}</h1>
-            <p className="text-[13px] text-text-tertiary mt-0.5">
-              {stats ? `${stats.total} ${config.itemNamePlural} · ${stats.totalBottles} total` : "Loading..."}
+    <div className="space-y-5 pb-2">
+      {/* Greeting */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="font-serif text-[28px] sm:text-[34px] font-semibold text-text-primary leading-tight">
+            {getGreeting()} <span className="text-pink">🍷</span>
+          </h1>
+          <p className="text-[13px] text-text-tertiary mt-1">Here&apos;s what&apos;s happening in your wine world.</p>
+        </div>
+        <button className="relative w-10 h-10 rounded-full bg-surface-raised border border-border-subtle flex items-center justify-center text-text-tertiary hover:text-text-secondary transition-colors">
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+          {newThisWeek > 0 && (
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-pink" />
+          )}
+        </button>
+      </div>
+
+      {/* Two feature cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Fridge card */}
+        <a
+          href="/fridge"
+          className="relative overflow-hidden rounded-2xl border border-border-subtle p-5 group transition-all hover:border-gold/30"
+          style={{
+            background: "linear-gradient(135deg, rgba(183,58,94,0.18) 0%, rgba(138,63,90,0.08) 60%, rgba(20,12,16,0.6) 100%)",
+          }}
+        >
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-7 h-7 rounded-lg bg-gold-muted flex items-center justify-center">
+                <CellarIcon />
+              </div>
+              <span className="text-[13px] font-medium text-text-secondary">My {config.fridgeLabel}</span>
+            </div>
+            <p className="font-serif text-[40px] font-semibold leading-none">{stats?.totalBottles ?? "—"}</p>
+            <p className="text-[12px] text-text-tertiary mt-1">Bottles</p>
+            <p className="text-[11px] text-text-muted mt-3">
+              {newThisWeek > 0 ? `${newThisWeek} new this week` : "View collection"}
             </p>
           </div>
-        </div>
+          {/* Decorative bottle silhouettes */}
+          <div className="absolute right-3 top-3 bottom-3 w-20 opacity-30 group-hover:opacity-50 transition-opacity flex items-end gap-1">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="flex-1 rounded-t-full bg-gradient-to-t from-gold to-transparent"
+                style={{ height: `${60 + i * 10}%` }}
+              />
+            ))}
+          </div>
+        </a>
 
-        {/* Quick stats bar */}
-        {stats && stats.total > 0 && (
-          <div className="grid grid-cols-4 gap-2 mb-5">
-            <div className="bg-surface-raised rounded-lg border border-border-subtle px-3 py-2.5">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider font-medium">Total</p>
-              <p className="text-lg font-bold tabular-nums text-text-primary">{stats.totalBottles}</p>
+        {/* Scan & Add card */}
+        <a
+          href="/fridge/scan"
+          className="relative overflow-hidden rounded-2xl border border-gold/20 p-5 group transition-all hover:border-gold/40"
+          style={{
+            background: "linear-gradient(135deg, rgba(212,184,122,0.1) 0%, rgba(183,58,94,0.08) 60%, rgba(20,12,16,0.6) 100%)",
+          }}
+        >
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-cream">✨</span>
+              <span className="font-serif text-[18px] font-semibold">Scan & Add</span>
             </div>
-            <div className="bg-surface-raised rounded-lg border border-border-subtle px-3 py-2.5">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider font-medium">Labels</p>
-              <p className="text-lg font-bold tabular-nums text-text-primary">{stats.total}</p>
-            </div>
-            <div className="bg-surface-raised rounded-lg border border-border-subtle px-3 py-2.5">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider font-medium">Avg Rating</p>
-              <p className="text-lg font-bold tabular-nums text-gold">{stats.avgRating || "—"}</p>
-            </div>
-            <div className="bg-surface-raised rounded-lg border border-border-subtle px-3 py-2.5">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider font-medium">Value</p>
-              <p className="text-lg font-bold tabular-nums text-text-primary">${stats.totalSpent.toLocaleString()}</p>
+            <p className="text-[12px] text-text-secondary leading-relaxed mb-4 max-w-[200px]">
+              Snap a photo of your wine collection and let AI identify & enrich your wines.
+            </p>
+            <div className="inline-flex items-center gap-1.5 bg-cream/15 hover:bg-cream/25 text-cream border border-cream/20 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all">
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.66-.9l.82-1.2A2 2 0 0110.07 4h3.86a2 2 0 011.66.9l.82 1.2a2 2 0 001.66.9H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+              Scan Cellar
             </div>
           </div>
-        )}
+        </a>
       </div>
 
-      {/* Search */}
-      <div className="relative mb-4">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          type="text"
-          placeholder={`Search ${config.itemNamePlural}...`}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2 rounded-lg bg-surface-raised border border-border-subtle text-[13px] text-text-primary placeholder-text-muted focus:outline-none focus:border-gold/30 focus:ring-1 focus:ring-gold/20 transition-all"
-        />
-      </div>
-
-      {/* Filter toolbar */}
-      <div className="flex items-center gap-3 mb-4 overflow-x-auto pb-1">
-        {/* Status */}
-        <div className="flex gap-1 bg-surface-raised rounded-lg p-0.5 border border-border-subtle flex-shrink-0">
-          {statuses.map((s) => (
-            <button
-              key={s.key}
-              onClick={() => setStatusFilter(s.key)}
-              className={`px-2.5 py-1 rounded-md text-[12px] font-medium transition-all ${
-                statusFilter === s.key
-                  ? "bg-surface-overlay text-text-primary shadow-sm"
-                  : "text-text-muted hover:text-text-tertiary"
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Separator */}
-        <div className="w-px h-5 bg-border flex-shrink-0" />
-
-        {/* Type pills */}
-        <div className="flex gap-1 flex-shrink-0">
-          {config.types.map((t) => (
-            <button
-              key={t.value}
-              onClick={() => setColorFilter(colorFilter === t.value ? "" : t.value)}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-all ${
-                colorFilter === t.value
-                  ? "bg-gold-muted text-gold ring-1 ring-gold/20"
-                  : "text-text-muted hover:text-text-tertiary hover:bg-surface-raised"
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: t.dotColor }} />
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Sort + view controls */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-1">
-          <span className="text-[11px] text-text-muted mr-1">Sort</span>
-          {[
-            { key: "createdAt", label: "Recent" },
-            { key: "rating", label: "Rating" },
-            { key: "price", label: "Price" },
-            { key: "name", label: "Name" },
-          ].map((s) => (
-            <button
-              key={s.key}
-              onClick={() => setSort(s.key)}
-              className={`text-[11px] px-2 py-0.5 rounded transition-all ${
-                sort === s.key
-                  ? "bg-surface-overlay text-text-primary font-medium"
-                  : "text-text-muted hover:text-text-tertiary"
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-
-        {/* View toggle */}
-        <div className="flex gap-0.5 bg-surface-raised rounded-md p-0.5 border border-border-subtle">
-          <button
-            onClick={() => setView("list")}
-            className={`p-1 rounded transition-all ${view === "list" ? "bg-surface-overlay text-text-primary" : "text-text-muted"}`}
-          >
-            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setView("grid")}
-            className={`p-1 rounded transition-all ${view === "grid" ? "bg-surface-overlay text-text-primary" : "text-text-muted"}`}
-          >
-            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Item list */}
-      {loading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-surface-raised rounded-xl border border-border-subtle p-3.5 animate-pulse">
-              <div className="flex gap-3.5">
-                <div className="w-12 h-16 bg-surface-overlay rounded-lg" />
-                <div className="flex-1 space-y-2 py-1">
-                  <div className="h-3.5 bg-surface-overlay rounded w-2/3" />
-                  <div className="h-3 bg-surface-overlay rounded w-1/3" />
-                  <div className="h-3 bg-surface-overlay rounded w-1/2" />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : wines.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="w-16 h-16 rounded-2xl bg-gold-muted flex items-center justify-center mx-auto mb-4 text-3xl">
-            {config.icon}
-          </div>
-          <h2 className="text-lg font-semibold text-text-primary mb-1">Your collection is empty</h2>
-          <p className="text-[13px] text-text-tertiary mb-5">Add your first {config.itemName} to get started</p>
-          <a
-            href="/add"
-            className="inline-flex items-center gap-2 bg-gold/90 hover:bg-gold text-bg px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-colors"
-          >
-            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            Add {config.label}
-          </a>
-        </div>
-      ) : view === "grid" ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {wines.map((wine) => (
-            <a
-              key={wine.id}
-              href={`/wine/${wine.id}`}
-              className="bg-surface-raised rounded-xl border border-border-subtle hover:border-border p-3 transition-all group"
-            >
-              {wine.imageData || wine.labelImageUrl ? (
-                <img src={wine.imageData || wine.labelImageUrl || ""} alt={wine.name} className="w-full h-28 object-contain rounded-lg mb-2" />
-              ) : (
-                <div className="mb-2">
-                  <WineBottlePlaceholder color={wine.color} size="lg" name={wine.name} />
-                </div>
-              )}
-              <h3 className="text-[12px] font-semibold text-text-primary truncate">{wine.name}</h3>
-              {wine.winery && <p className="text-[11px] text-text-tertiary truncate">{wine.winery}</p>}
-              <div className="flex items-center justify-between mt-1.5">
-                {wine.rating ? <StarRatingMini rating={wine.rating} /> : <span className="text-[10px] text-text-muted">Unrated</span>}
-                {wine.price != null && <span className="text-[11px] font-medium text-text-secondary tabular-nums">${wine.price.toFixed(0)}</span>}
-              </div>
+      {/* AI Recently Added */}
+      {recentEnriched.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-serif text-[20px] font-semibold">AI Recently Added</h2>
+            <a href="/fridge" className="text-[12px] text-text-tertiary hover:text-gold transition-colors flex items-center gap-1">
+              See all
+              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
             </a>
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          {wines.map((wine) => (
-            <WineCard key={wine.id} wine={wine} onQuickRate={handleQuickRate} onQuickConsume={handleQuickConsume} />
-          ))}
+          </div>
+          <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1 -mx-4 px-4">
+            {recentEnriched.map((wine) => (
+              <a
+                key={wine.id}
+                href={`/wine/${wine.id}`}
+                className="flex-shrink-0 w-[180px] rounded-2xl overflow-hidden bg-surface-raised border border-border-subtle hover:border-gold/30 transition-all group"
+              >
+                <div className="h-[160px] bg-gradient-to-br from-surface-overlay to-surface relative overflow-hidden flex items-center justify-center">
+                  {wine.imageData || wine.labelImageUrl ? (
+                    <img
+                      src={wine.imageData || wine.labelImageUrl || ""}
+                      alt={wine.name}
+                      className="h-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-5xl opacity-40">🍷</span>
+                  )}
+                </div>
+                <div className="p-3">
+                  <h3 className="font-serif text-[14px] font-semibold text-text-primary leading-tight line-clamp-2">
+                    {wine.winery && `${wine.winery} `}{wine.name}
+                  </h3>
+                  <p className="text-[11px] text-text-tertiary mt-1">
+                    {[wine.region, wine.country].filter(Boolean).join(", ")} {wine.vintage && `• ${wine.vintage}`}
+                  </p>
+                  <div className="mt-2 inline-flex items-center gap-1 text-[10px] text-cream">
+                    <span>✨</span>
+                    <span className="uppercase tracking-widest font-semibold">AI Enriched</span>
+                  </div>
+                </div>
+              </a>
+            ))}
+          </div>
         </div>
       )}
+
+      {/* Insights */}
+      {stats && stats.total > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-serif text-[20px] font-semibold">Your Wine Insights</h2>
+            <a href="/dashboard" className="text-[12px] text-text-tertiary hover:text-gold transition-colors flex items-center gap-1">
+              See all
+              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </a>
+          </div>
+
+          <div className="bg-surface-raised border border-border-subtle rounded-2xl p-4 mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Metric icon={<IconBottle />} value={stats.consumedBottles ?? stats.consumed} label="Bottles Consumed" />
+              <Metric icon={<IconGlobe />} value={stats.uniqueRegions} label="Regions Explored" />
+              <Metric icon={<IconCalendar />} value={stats.avgDaysBetween > 0 ? `${Math.round(stats.avgDaysBetween)}` : "—"} label="Days Between" />
+              <Metric icon={<IconGrape />} value={stats.avgRating || "—"} label="Avg Rating" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
+              <p className="text-[11px] text-text-muted uppercase tracking-widest font-medium mb-3">Top Regions</p>
+              {pieData.length > 0 ? (
+                <div className="flex items-center gap-3">
+                  <ResponsiveContainer width={120} height={120}>
+                    <PieChart>
+                      <Pie data={pieData} dataKey="count" nameKey="name" cx="50%" cy="50%" innerRadius={32} outerRadius={56} paddingAngle={2} strokeWidth={0}>
+                        {pieData.map((_, i) => (
+                          <Cell key={i} fill={REGION_COLORS[i % REGION_COLORS.length]} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="flex-1 space-y-1.5">
+                    {pieData.map((c, i) => {
+                      const pct = ((c.count / (stats.total || 1)) * 100).toFixed(0);
+                      return (
+                        <div key={c.name} className="flex items-center justify-between text-[11px]">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: REGION_COLORS[i % REGION_COLORS.length] }} />
+                            <span className="text-text-secondary truncate">{c.name}</span>
+                          </div>
+                          <span className="text-text-tertiary tabular-nums">{pct}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[12px] text-text-muted text-center py-6">No data yet</p>
+              )}
+            </div>
+
+            <div className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
+              <p className="text-[11px] text-text-muted uppercase tracking-widest font-medium mb-3">Consumption Over Time</p>
+              {monthlyData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={120}>
+                  <BarChart data={monthlyData}>
+                    <XAxis dataKey="month" tick={{ fill: "#75676a", fontSize: 10 }} tickFormatter={(v) => v.slice(5)} axisLine={false} tickLine={false} />
+                    <YAxis hide />
+                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                      {monthlyData.map((_, i) => (
+                        <Cell key={i} fill={i === monthlyData.length - 1 ? "#d4b87a" : "#b73a5e"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-[12px] text-text-muted text-center py-6">No data yet</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Discover with AI */}
+      <a
+        href="/fridge/drink"
+        className="relative overflow-hidden rounded-2xl border border-gold/20 p-5 block transition-all hover:border-gold/40"
+        style={{
+          background: "linear-gradient(135deg, rgba(212,184,122,0.12) 0%, rgba(183,58,94,0.1) 50%, rgba(20,12,16,0.6) 100%)",
+        }}
+      >
+        <div className="relative z-10 max-w-[60%]">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-cream">✨</span>
+            <h3 className="font-serif text-[18px] font-semibold">Discover with AI</h3>
+          </div>
+          <p className="text-[12px] text-text-secondary leading-relaxed mb-3">
+            Get personalized wine recommendations based on your taste and collection.
+          </p>
+          <div className="inline-flex items-center gap-1.5 bg-cream/15 hover:bg-cream/25 text-cream border border-cream/20 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all">
+            Get Recommendations
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </div>
+        {/* Decorative wine glass illustration */}
+        <div className="absolute right-4 bottom-0 top-0 w-32 flex items-center justify-end opacity-30 pointer-events-none">
+          <svg width="80" height="100" viewBox="0 0 80 100" fill="none">
+            <path d="M20 10 Q20 35 40 40 Q60 35 60 10 Z" fill="#b73a5e" opacity="0.6" />
+            <path d="M40 40 L40 80" stroke="#d4b87a" strokeWidth="2" />
+            <path d="M25 88 L55 88" stroke="#d4b87a" strokeWidth="2" />
+          </svg>
+        </div>
+      </a>
     </div>
   );
 }
 
-function StarRatingMini({ rating }: { rating: number }) {
+function Metric({ icon, value, label }: { icon: React.ReactNode; value: string | number; label: string }) {
   return (
-    <div className="flex gap-px">
-      {[1, 2, 3, 4, 5].map((s) => (
-        <span key={s} className={`text-[10px] leading-none ${s <= rating ? "text-gold" : "text-surface-highlight"}`}>★</span>
-      ))}
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <div className="text-pink">{icon}</div>
+      </div>
+      <p className="font-serif text-[24px] font-semibold leading-none">{value}</p>
+      <p className="text-[10.5px] text-text-tertiary mt-1">{label}</p>
     </div>
   );
 }
+
+const CellarIcon = () => (
+  <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} className="text-gold">
+    <rect x="4" y="3" width="16" height="18" rx="2" />
+    <path strokeLinecap="round" d="M4 9h16M4 15h16M9 3v18M15 3v18" />
+  </svg>
+);
+
+const IconBottle = () => (
+  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 2h6v3a3 3 0 002 3v11a3 3 0 01-3 3h-4a3 3 0 01-3-3V8a3 3 0 002-3V2z" />
+  </svg>
+);
+const IconGlobe = () => (
+  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
+    <circle cx="12" cy="12" r="9" />
+    <path strokeLinecap="round" d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18" />
+  </svg>
+);
+const IconCalendar = () => (
+  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
+    <rect x="3" y="5" width="18" height="16" rx="2" />
+    <path strokeLinecap="round" d="M3 10h18M8 3v4M16 3v4" />
+  </svg>
+);
+const IconGrape = () => (
+  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v3m0 0c-2 0-4 2-4 4s2 4 4 4 4-2 4-4-2-4-4-4zM6 12c-2 0-3 2-3 4s2 4 4 4 4-2 4-4M14 16c0 2 2 4 4 4s4-2 4-4-2-4-3-4" />
+  </svg>
+);

@@ -2,32 +2,44 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: "Playfair Display", "Cormorant Garamond", Georgia, serif;
 
-  /* Premium wine cellar palette */
-  --color-bg: #0c0c0e;
-  --color-surface: #141416;
-  --color-surface-raised: #1a1a1e;
-  --color-surface-overlay: #222226;
-  --color-surface-highlight: #2a2a2f;
+  /* Premium wine cellar palette — deep burgundy + warm dark */
+  --color-bg: #0a0608;
+  --color-surface: #120c10;
+  --color-surface-raised: #1a1116;
+  --color-surface-overlay: #22171c;
+  --color-surface-highlight: #2a1d22;
 
-  --color-border: #2a2a30;
-  --color-border-subtle: #1f1f24;
-  --color-border-accent: rgba(201, 169, 98, 0.2);
+  --color-border: #2a1d22;
+  --color-border-subtle: #1f1418;
+  --color-border-accent: rgba(183, 58, 94, 0.2);
 
-  --color-text-primary: #f5f0e8;
-  --color-text-secondary: #a09a8f;
-  --color-text-tertiary: #6b665e;
-  --color-text-muted: #4a4640;
+  --color-text-primary: #f5ecec;
+  --color-text-secondary: #b8a8a8;
+  --color-text-tertiary: #75676a;
+  --color-text-muted: #4a3d3f;
 
-  --color-gold: #c9a962;
-  --color-gold-light: #e4c87e;
-  --color-gold-muted: rgba(201, 169, 98, 0.12);
-  --color-gold-subtle: rgba(201, 169, 98, 0.06);
+  /* Primary accent: rich burgundy red */
+  --color-gold: #b73a5e;
+  --color-gold-light: #e0617e;
+  --color-gold-muted: rgba(183, 58, 94, 0.12);
+  --color-gold-subtle: rgba(183, 58, 94, 0.06);
 
-  --color-wine-red: #c75050;
+  /* Pink accent for highlights, charts, AI badges */
+  --color-pink: #e0617e;
+  --color-pink-light: #f4b8c5;
+  --color-pink-muted: rgba(224, 97, 126, 0.14);
+  --color-pink-subtle: rgba(224, 97, 126, 0.06);
+
+  /* Cream/champagne for premium accents like critic badges */
+  --color-cream: #d4b87a;
+  --color-cream-muted: rgba(212, 184, 122, 0.12);
+
+  --color-wine-red: #b73a5e;
   --color-wine-white: #e8dca0;
   --color-wine-rose: #d4849a;
-  --color-wine-sparkling: #7abed4;
+  --color-wine-sparkling: #c8b88e;
   --color-wine-dessert: #d4a44e;
   --color-wine-orange: #d48a4e;
 
@@ -39,16 +51,26 @@
 
 body {
   background: var(--color-bg);
+  background-image:
+    radial-gradient(ellipse 80% 40% at 50% -10%, rgba(183, 58, 94, 0.08), transparent 70%),
+    radial-gradient(ellipse 60% 30% at 100% 100%, rgba(183, 58, 94, 0.05), transparent 70%);
+  background-attachment: fixed;
   font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.011em;
 }
 
+.font-serif { font-family: var(--font-serif); letter-spacing: -0.02em; }
+
 /* Scrollbar */
-::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #2a2a30; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3a3a40; }
+::-webkit-scrollbar-thumb { background: #2a1d22; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a2a30; }
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* Remove number input spinners */
 input[type="number"]::-webkit-inner-spin-button,
@@ -60,6 +82,11 @@ input[type="number"] { -moz-appearance: textfield; }
 
 /* Selection */
 ::selection {
-  background: rgba(201, 169, 98, 0.3);
-  color: #f5f0e8;
+  background: rgba(183, 58, 94, 0.35);
+  color: #f5ecec;
+}
+
+/* Glow utility for premium accent */
+.glow-burgundy {
+  box-shadow: 0 0 40px rgba(183, 58, 94, 0.25), 0 0 80px rgba(183, 58, 94, 0.1);
 }

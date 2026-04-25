@@ -129,6 +129,69 @@ export async function GET(req: NextRequest) {
     return d.getMonth() === today.getMonth() && d.getDate() === today.getDate() && d.getFullYear() !== today.getFullYear();
   });
 
+  // Build recent activity feed from consumption logs + recent additions
+  const wineMap: Record<number, typeof wines[0]> = {};
+  wines.forEach((w) => { wineMap[w.id] = w; });
+
+  type Activity = {
+    id: string;
+    type: "consumed" | "added";
+    wineId: number;
+    name: string;
+    winery: string | null;
+    vintage: number | null;
+    color: string | null;
+    rating: number | null;
+    onlineRating: number | null;
+    imageData: string | null;
+    labelImageUrl: string | null;
+    region: string | null;
+    country: string | null;
+    timestamp: Date;
+  };
+
+  const consumedActivity: Activity[] = consumptionLogs.flatMap((log) => {
+    const w = wineMap[log.wineId];
+    if (!w) return [];
+    return [{
+      id: `c-${log.id}`,
+      type: "consumed" as const,
+      wineId: w.id,
+      name: w.name,
+      winery: w.winery,
+      vintage: w.vintage,
+      color: w.color,
+      rating: log.rating ?? w.rating,
+      onlineRating: w.onlineRating,
+      imageData: w.imageData,
+      labelImageUrl: w.labelImageUrl,
+      region: w.region,
+      country: w.country,
+      timestamp: log.createdAt,
+    }];
+  });
+
+  const addedActivity: Activity[] = wines.map((w) => ({
+    id: `a-${w.id}`,
+    type: "added" as const,
+    wineId: w.id,
+    name: w.name,
+    winery: w.winery,
+    vintage: w.vintage,
+    color: w.color,
+    rating: w.rating,
+    onlineRating: w.onlineRating,
+    imageData: w.imageData,
+    labelImageUrl: w.labelImageUrl,
+    region: w.region,
+    country: w.country,
+    timestamp: w.createdAt,
+  }));
+
+  const recentActivity = [...consumedActivity, ...addedActivity]
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, 8);
+
   return NextResponse.json({
     total, totalBottles, inCollection, consumed, consumedBottles, wishlist,
     avgRating: Math.round(avgRating * 10) / 10,
@@ -140,5 +203,6 @@ export async function GET(req: NextRequest) {
     uniqueVarietals, uniqueRegions, uniqueCountries,
     wineOfDay: wineOfDay ? { id: wineOfDay.id, name: wineOfDay.name, winery: wineOfDay.winery, rating: wineOfDay.rating, imageData: wineOfDay.imageData, labelImageUrl: wineOfDay.labelImageUrl, color: wineOfDay.color, vintage: wineOfDay.vintage } : null,
     onThisDay: onThisDay.map((w) => ({ id: w.id, name: w.name, winery: w.winery, createdAt: w.createdAt, rating: w.rating })),
+    recentActivity,
   });
 }
