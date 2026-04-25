@@ -36,35 +36,14 @@ const tooltipStyle = {
 export default function Dashboard() {
   const { category, config } = useCategory();
   const [stats, setStats] = useState<Stats | null>(null);
-  const [enriching, setEnriching] = useState(false);
-  const [enrichResult, setEnrichResult] = useState<{ total: number; enriched: number; errors: number } | null>(null);
 
   useEffect(() => {
     setStats(null);
-    setEnrichResult(null);
     // Auto-fix wines stuck at quantity 0 with "collection" status
     fetch("/api/wines/fix-consumed", { method: "POST" }).then(() => {
       fetch(`/api/stats?category=${category}`).then((r) => r.json()).then(setStats);
     });
   }, [category]);
-
-  const handleEnrichAll = async (force = false) => {
-    setEnriching(true);
-    setEnrichResult(null);
-    try {
-      const res = await fetch("/api/wines/enrich-all", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, force }),
-      });
-      if (res.ok) {
-        const result = await res.json();
-        setEnrichResult(result);
-      }
-    } finally {
-      setEnriching(false);
-    }
-  };
 
   // Build color map from category config
   const COLOR_MAP: Record<string, string> = {};
@@ -103,39 +82,10 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-[13px] text-text-tertiary mt-0.5">Your {config.itemName} collection at a glance</p>
-        </div>
-        <button
-          onClick={() => handleEnrichAll(false)}
-          disabled={enriching}
-          className="flex items-center gap-1.5 bg-surface-raised hover:bg-surface-overlay border border-border-subtle px-3 py-1.5 rounded-lg text-[12px] font-medium text-text-secondary hover:text-gold transition-all disabled:opacity-50 flex-shrink-0"
-        >
-          {enriching ? (
-            <>
-              <div className="animate-spin w-3.5 h-3.5 border-2 border-gold border-t-transparent rounded-full" />
-              Enriching...
-            </>
-          ) : (
-            <>
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} className="text-gold">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-              Enrich All
-            </>
-          )}
-        </button>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-[13px] text-text-tertiary mt-0.5">Your {config.itemName} collection at a glance</p>
       </div>
-
-      {enrichResult && (
-        <div className={`rounded-xl border p-3 text-[12px] ${enrichResult.errors > 0 ? "bg-gold-muted border-gold/15 text-text-secondary" : "bg-success-muted border-success/15 text-success"}`}>
-          Enriched {enrichResult.enriched} of {enrichResult.total} {config.itemNamePlural}
-          {enrichResult.errors > 0 && ` (${enrichResult.errors} errors)`}
-          {enrichResult.total === 0 && " — all items already have rich data"}
-        </div>
-      )}
 
       {/* Item of the Day */}
       {stats.wineOfDay && (

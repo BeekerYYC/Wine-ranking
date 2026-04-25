@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { enrichWine } from "@/lib/enrich";
 
 export async function GET(req: NextRequest) {
   const search = req.nextUrl.searchParams.get("search") || "";
@@ -91,5 +92,15 @@ export async function POST(req: NextRequest) {
     include: { store: true },
   });
 
-  return NextResponse.json(wine, { status: 201 });
+  // Auto-enrich if critical fields are missing (e.g. manual entry without scan)
+  if (!wine.tastingNotes || !wine.criticReviews) {
+    await enrichWine(wine.id);
+  }
+
+  const enriched = await prisma.wine.findUnique({
+    where: { id: wine.id },
+    include: { store: true },
+  });
+
+  return NextResponse.json(enriched, { status: 201 });
 }

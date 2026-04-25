@@ -4,9 +4,10 @@ import Anthropic from "@anthropic-ai/sdk";
 const anthropic = new Anthropic();
 
 const PROMPTS: Record<string, string> = {
-  wine: `Analyze this wine bottle label image. Identify the wine and use your knowledge to provide comprehensive details.
+  wine: `You are a master sommelier and wine expert. Identify this wine from the label and provide COMPREHENSIVE details using your full knowledge of wine, including critic reviews and online rankings.
 
-Extract and return a JSON object with these fields:
+Return a JSON object with these fields. Be thorough — pull every detail you know about this specific wine and vintage:
+
 - name: the wine name
 - winery: the producer/winery name
 - vintage: the year (number or null)
@@ -14,12 +15,12 @@ Extract and return a JSON object with these fields:
 - region: wine region (e.g. "Napa Valley", "Bordeaux")
 - country: country of origin
 - color: one of "red", "white", "rosé", "sparkling", "dessert", "orange"
-- description: 3-5 sentences about this wine — the winery's history, what makes this wine notable, the terroir and winemaking style
-- tastingNotes: detailed tasting profile — describe aroma, palate, body, tannins/acidity, and finish. Be specific (e.g. "blackcurrant, cedar, and tobacco on the nose" not just "fruity")
-- drinkingWindow: recommended drinking window (e.g. "2024-2030" or "Drink now" for ready wines). Use null if unknown
-- criticReviews: known critic scores and brief review excerpts. Format as "Robert Parker: 93 — Rich and layered; Wine Spectator: 91 — Elegant with firm tannins". Use null if no notable reviews are known
-- foodPairings: 5-6 specific food pairing suggestions as a comma-separated string (be specific: "grilled lamb chops with rosemary" not just "meat")
-- onlineRating: estimated community/critic consensus rating on a 100-point scale (number or null)
+- description: 4-6 sentences about this wine — the winery's history and reputation, what makes this specific wine/vintage notable, terroir, and winemaking techniques
+- tastingNotes: detailed professional tasting note — describe appearance, aroma (primary, secondary, tertiary), palate (body, tannins, acidity, flavors), and finish. Be specific and evocative (e.g. "blackcurrant, cedar, and tobacco on the nose; full-bodied with firm tannins and notes of cassis and graphite on the palate")
+- drinkingWindow: recommended drinking window (e.g. "2024-2030" or "Drink now through 2026"). Use null if truly unknown
+- criticReviews: known critic scores and brief excerpts from MULTIPLE sources. Format as "Robert Parker: 93 — Rich and layered; Wine Spectator: 91 — Elegant with firm tannins; James Suckling: 94; Vivino: 4.2/5 (1,200 ratings); Wine Enthusiast: 92". Include as many notable scores as you know — Parker, Wine Spectator, Suckling, Decanter, Vivino, Wine Enthusiast, Jancis Robinson, etc. Only use null if this is a truly obscure wine
+- foodPairings: 6-8 specific food pairing suggestions as a comma-separated string (be specific: "grilled lamb chops with rosemary" not just "lamb")
+- onlineRating: estimated community/critic consensus rating on a 100-point scale (weighted average of known scores)
 - confidence: how confident you are in this identification, 0.0 to 1.0`,
 
   coffee: `Analyze this coffee bag/label image. Identify the coffee and use your knowledge to provide comprehensive details.
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
 
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 1024,
+    max_tokens: 3072,
     messages: [
       {
         role: "user",
