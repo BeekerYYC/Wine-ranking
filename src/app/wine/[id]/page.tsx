@@ -18,6 +18,7 @@ interface Wine {
   varietal?: string | null; region?: string | null; country?: string | null;
   color?: string | null; price?: number | null; rating?: number | null;
   notes?: string | null; description?: string | null; imageData?: string | null;
+  labelImageUrl?: string | null;
   tastingNotes?: string | null; drinkingWindow?: string | null;
   criticReviews?: string | null;
   quantity: number; status: string; occasion?: string | null;
@@ -39,6 +40,7 @@ export default function WineDetail() {
   const [notes, setNotes] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [findingImage, setFindingImage] = useState(false);
   const [showConsume, setShowConsume] = useState(false);
 
   useEffect(() => {
@@ -84,6 +86,19 @@ export default function WineDetail() {
     setShowConsume(false);
   };
 
+  const handleFindImage = async () => {
+    setFindingImage(true);
+    try {
+      const res = await fetch(`/api/wines/${id}/find-image`, { method: "POST" });
+      if (res.ok) {
+        const updated = await res.json();
+        setWine(updated);
+      }
+    } finally {
+      setFindingImage(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!confirm(`Delete this ${config.itemName}?`)) return;
     await fetch(`/api/wines/${id}`, { method: "DELETE" });
@@ -116,9 +131,41 @@ export default function WineDetail() {
         Back to collection
       </button>
 
-      {wine.imageData && (
-        <div className="bg-surface-raised rounded-xl border border-border-subtle p-4 mb-4 flex justify-center">
-          <img src={wine.imageData} alt={wine.name} className="max-h-56 object-contain rounded-lg" />
+      {(wine.imageData || wine.labelImageUrl) ? (
+        <div className="bg-surface-raised rounded-xl border border-border-subtle p-4 mb-4 flex flex-col items-center gap-3">
+          <img src={wine.imageData || wine.labelImageUrl || ""} alt={wine.name} className="max-h-56 object-contain rounded-lg" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          {!wine.imageData && wine.labelImageUrl && (
+            <p className="text-[10px] text-text-muted uppercase tracking-wider">Stock label image</p>
+          )}
+          <button
+            onClick={handleFindImage}
+            disabled={findingImage}
+            className="text-[11px] text-text-muted hover:text-gold transition-colors disabled:opacity-50"
+          >
+            {findingImage ? "Searching..." : wine.labelImageUrl ? "Refresh stock image" : "Find label image online"}
+          </button>
+        </div>
+      ) : (
+        <div className="bg-surface-raised rounded-xl border border-border-subtle p-6 mb-4 flex flex-col items-center gap-3">
+          <button
+            onClick={handleFindImage}
+            disabled={findingImage}
+            className="flex items-center gap-2 bg-gold-muted hover:bg-gold/20 text-gold border border-gold/15 px-4 py-2 rounded-lg text-[12px] font-semibold transition-all disabled:opacity-50"
+          >
+            {findingImage ? (
+              <>
+                <div className="animate-spin w-3.5 h-3.5 border-2 border-gold border-t-transparent rounded-full" />
+                Searching online...
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                Find label image online
+              </>
+            )}
+          </button>
         </div>
       )}
 

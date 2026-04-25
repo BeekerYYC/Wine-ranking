@@ -9,6 +9,7 @@ interface Wine {
   id: number; name: string; winery?: string | null; vintage?: number | null;
   varietal?: string | null; color?: string | null; price?: number | null;
   rating?: number | null; quantity: number; imageData?: string | null;
+  labelImageUrl?: string | null;
   onlineRating?: number | null; confidence?: number | null;
 }
 
@@ -162,8 +163,8 @@ export default function FridgePage() {
               {grouped[group].map((wine) => (
                 <div key={wine.id} className="bg-surface-raised rounded-xl border border-border-subtle hover:border-border p-3 transition-all group relative">
                   <a href={`/wine/${wine.id}`} className="block">
-                    {wine.imageData ? (
-                      <img src={wine.imageData} alt={wine.name} className="w-full h-24 object-contain rounded-lg mb-2" />
+                    {wine.imageData || wine.labelImageUrl ? (
+                      <img src={wine.imageData || wine.labelImageUrl || ""} alt={wine.name} className="w-full h-24 object-contain rounded-lg mb-2" />
                     ) : (
                       <div className="mb-2">
                         <WineBottlePlaceholder color={wine.color} size="lg" name={wine.name} />

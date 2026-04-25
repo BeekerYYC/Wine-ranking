@@ -21,6 +21,7 @@ interface Wine {
   confidence?: number | null;
   consumedAt?: string | null;
   imageData?: string | null;
+  labelImageUrl?: string | null;
 }
 
 export default function WineCard({
@@ -39,10 +40,10 @@ export default function WineCard({
   return (
     <div className="group relative bg-surface-raised hover:bg-surface-overlay rounded-xl border border-border-subtle hover:border-border transition-all duration-200">
       <a href={`/wine/${wine.id}`} className="flex gap-3.5 p-3.5">
-        {/* Image */}
-        {wine.imageData ? (
+        {/* Image: prefer user photo, fall back to AI-found label, then placeholder */}
+        {wine.imageData || wine.labelImageUrl ? (
           <img
-            src={wine.imageData}
+            src={wine.imageData || wine.labelImageUrl || ""}
             alt={wine.name}
             className="w-12 h-16 object-cover rounded-lg flex-shrink-0"
           />

@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
     varietalBreakdown, colorBreakdown, countryBreakdown,
     priceRating, monthlyAdditions, ratingDist, topWines, bestValue,
     uniqueVarietals, uniqueRegions, uniqueCountries,
-    wineOfDay: wineOfDay ? { id: wineOfDay.id, name: wineOfDay.name, winery: wineOfDay.winery, rating: wineOfDay.rating, imageData: wineOfDay.imageData, color: wineOfDay.color, vintage: wineOfDay.vintage } : null,
+    wineOfDay: wineOfDay ? { id: wineOfDay.id, name: wineOfDay.name, winery: wineOfDay.winery, rating: wineOfDay.rating, imageData: wineOfDay.imageData, labelImageUrl: wineOfDay.labelImageUrl, color: wineOfDay.color, vintage: wineOfDay.vintage } : null,
     onThisDay: onThisDay.map((w) => ({ id: w.id, name: w.name, winery: w.winery, createdAt: w.createdAt, rating: w.rating })),
   });
 }

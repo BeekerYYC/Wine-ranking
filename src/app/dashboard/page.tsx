@@ -20,7 +20,7 @@ interface Stats {
   topWines: { id: number; name: string; rating: number; winery: string; vintage: number }[];
   bestValue: { id: number; name: string; rating: number; price: number; winery: string }[];
   uniqueVarietals: number; uniqueRegions: number; uniqueCountries: number;
-  wineOfDay: { id: number; name: string; winery: string; rating: number; imageData: string; color: string; vintage: number } | null;
+  wineOfDay: { id: number; name: string; winery: string; rating: number; imageData: string | null; labelImageUrl: string | null; color: string; vintage: number } | null;
   onThisDay: { id: number; name: string; winery: string; createdAt: string; rating: number }[];
 }
 
@@ -92,8 +92,8 @@ export default function Dashboard() {
         <a href={`/wine/${stats.wineOfDay.id}`} className="block bg-surface-raised rounded-xl border border-border-subtle p-4 hover:border-border transition-all group">
           <p className="text-[10px] text-gold uppercase tracking-widest font-medium mb-2.5">{config.label} of the day</p>
           <div className="flex items-center gap-3">
-            {stats.wineOfDay.imageData ? (
-              <img src={stats.wineOfDay.imageData} alt="" className="w-10 h-14 object-cover rounded-lg" />
+            {stats.wineOfDay.imageData || stats.wineOfDay.labelImageUrl ? (
+              <img src={stats.wineOfDay.imageData || stats.wineOfDay.labelImageUrl || ""} alt="" className="w-10 h-14 object-cover rounded-lg" />
             ) : (
               <div className="w-10 h-14 bg-surface-overlay rounded-lg flex items-center justify-center text-xl">
                 {config.icon}

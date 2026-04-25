@@ -25,7 +25,8 @@ model Wine {
   tastingNotes  String?  // detailed tasting profile: aroma, palate, finish
   drinkingWindow String? // e.g. "2024-2030"
   criticReviews String?  // notable critic scores/reviews
-  imageData     String?  // base64 encoded image
+  imageData     String?  // base64 encoded user photo
+  labelImageUrl String?  // AI-found URL of an official label image (fallback for missing/bad photos)
   quantity      Int      @default(1)
   status        String   @default("collection") // collection, wishlist, consumed, restaurant
   occasion      String?  // comma-separated: date-night, party, gift, weeknight, celebration

@@ -54,6 +54,48 @@ Return a JSON object with these fields (use null for anything you're not confide
 - onlineRating: estimated community rating on a 100-point scale`,
 };
 
+// Use web_search to find a stock image URL of the item's label/bottle
+async function findLabelImageUrl(wine: Record<string, unknown>): Promise<string | null> {
+  const query = [wine.winery, wine.name, wine.vintage].filter(Boolean).join(" ");
+  if (!query) return null;
+
+  try {
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1024,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }],
+      messages: [
+        {
+          role: "user",
+          content: `Search the web for a clear photo of the bottle label for: "${query}".
+
+Look on the producer's website, Wine-Searcher, Vivino, Wine.com, or other reliable wine sites. Find a direct image URL (ending in .jpg, .jpeg, .png, or .webp) showing the front of the bottle/label.
+
+Return ONLY a JSON object with a single field: {"imageUrl": "https://..."} — a direct image URL that an HTML <img> tag could use. If you cannot find a suitable image, return {"imageUrl": null}.
+
+Do not include any other text, explanation, or markdown code blocks.`,
+        },
+      ],
+    });
+
+    // Find the last text block (final response after any tool use)
+    const textBlocks = message.content.filter((b) => b.type === "text");
+    const finalText = textBlocks[textBlocks.length - 1];
+    if (!finalText || finalText.type !== "text") return null;
+
+    // Extract JSON from response (may be wrapped in markdown)
+    const jsonMatch = finalText.text.match(/\{[^}]*"imageUrl"[^}]*\}/);
+    if (!jsonMatch) return null;
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    const url = parsed.imageUrl;
+    if (typeof url !== "string" || !url.startsWith("http")) return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 export async function enrichWine(wineId: number): Promise<{ success: boolean; error?: string }> {
   const wine = await prisma.wine.findUnique({ where: { id: wineId } });
   if (!wine) return { success: false, error: "Not found" };
@@ -63,16 +105,21 @@ export async function enrichWine(wineId: number): Promise<{ success: boolean; er
   const prompt = promptFn(wine as unknown as Record<string, unknown>);
 
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2048,
-      messages: [
-        {
-          role: "user",
-          content: `${prompt}\n\nReturn ONLY valid JSON, no markdown code blocks or other text.`,
-        },
-      ],
-    });
+    // Run enrichment + label image search in parallel
+    const [message, labelImageUrl] = await Promise.all([
+      anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2048,
+        messages: [
+          {
+            role: "user",
+            content: `${prompt}\n\nReturn ONLY valid JSON, no markdown code blocks or other text.`,
+          },
+        ],
+      }),
+      // Only search for label image if missing
+      wine.labelImageUrl ? Promise.resolve(null) : findLabelImageUrl(wine as unknown as Record<string, unknown>),
+    ]);
 
     const text = message.content[0].type === "text" ? message.content[0].text : "";
     const parsed = JSON.parse(text);
@@ -84,10 +131,23 @@ export async function enrichWine(wineId: number): Promise<{ success: boolean; er
     if (parsed.criticReviews) data.criticReviews = parsed.criticReviews;
     if (parsed.foodPairings) data.foodPairings = parsed.foodPairings;
     if (parsed.onlineRating) data.onlineRating = parseFloat(parsed.onlineRating);
+    if (labelImageUrl) data.labelImageUrl = labelImageUrl;
 
     await prisma.wine.update({ where: { id: wineId }, data });
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Failed" };
   }
+}
+
+// Manual trigger to refresh the label image for a wine
+export async function refreshLabelImage(wineId: number): Promise<string | null> {
+  const wine = await prisma.wine.findUnique({ where: { id: wineId } });
+  if (!wine) return null;
+
+  const url = await findLabelImageUrl(wine as unknown as Record<string, unknown>);
+  if (url) {
+    await prisma.wine.update({ where: { id: wineId }, data: { labelImageUrl: url } });
+  }
+  return url;
 }

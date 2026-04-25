@@ -21,6 +21,7 @@ interface Wine {
   onlineRating?: number | null;
   consumedAt?: string | null;
   imageData?: string | null;
+  labelImageUrl?: string | null;
   createdAt: string;
 }
 
@@ -287,8 +288,8 @@ export default function Home() {
               href={`/wine/${wine.id}`}
               className="bg-surface-raised rounded-xl border border-border-subtle hover:border-border p-3 transition-all group"
             >
-              {wine.imageData ? (
-                <img src={wine.imageData} alt={wine.name} className="w-full h-28 object-contain rounded-lg mb-2" />
+              {wine.imageData || wine.labelImageUrl ? (
+                <img src={wine.imageData || wine.labelImageUrl || ""} alt={wine.name} className="w-full h-28 object-contain rounded-lg mb-2" />
               ) : (
                 <div className="mb-2">
                   <WineBottlePlaceholder color={wine.color} size="lg" name={wine.name} />
