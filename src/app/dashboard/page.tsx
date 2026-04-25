@@ -9,7 +9,7 @@ import {
 
 interface Stats {
   total: number; totalBottles: number; inCollection: number; consumed: number;
-  consumedWines: number; wishlist: number; avgRating: number; avgPrice: number; totalSpent: number;
+  consumedBottles: number; wishlist: number; avgRating: number; avgPrice: number; totalSpent: number;
   avgDaysBetween: number;
   varietalBreakdown: { name: string; count: number }[];
   colorBreakdown: { name: string; count: number }[];
@@ -175,7 +175,7 @@ export default function Dashboard() {
         <Stat label="Avg rating" value={stats.avgRating || "—"} sub="out of 5" highlight />
         <Stat label="Avg price" value={`$${stats.avgPrice}`} />
         <Stat label="Total spent" value={`$${stats.totalSpent.toLocaleString()}`} />
-        <Stat label="Consumed" value={stats.consumed} sub={stats.consumed !== stats.consumedWines ? `${stats.consumedWines} finished` : undefined} />
+        <Stat label="Consumed" value={stats.consumed} sub={stats.consumedBottles > stats.consumed ? `${stats.consumedBottles} bottles` : undefined} />
         <Stat label="Wishlist" value={stats.wishlist} />
         <Stat label="Pace" value={stats.avgDaysBetween > 0 ? `${Math.round(stats.avgDaysBetween)}d` : "—"} sub="between bottles" />
       </div>
