@@ -14,6 +14,15 @@ interface DetectedBottle {
   color: string | null;
   quantity: number;
   confidence: number;
+  sourceImageIndex?: number;
+}
+
+interface Candidate {
+  wineId: number;
+  name: string;
+  winery: string | null;
+  vintage: number | null;
+  dbQty: number;
 }
 
 interface DiffResponse {
@@ -21,9 +30,9 @@ interface DiffResponse {
   totalDetectedBottles: number;
   totalDbBottles: number;
   matches: { wineId: number; name: string; dbQty: number; detectedQty: number }[];
-  quantityMismatches: { wineId: number; name: string; dbQty: number; detectedQty: number; delta: number }[];
+  quantityMismatches: { wineId: number; name: string; dbQty: number; detectedQty: number; delta: number; sourceImageIndex?: number }[];
   missingFromPhotos: { wineId: number; name: string; winery: string | null; vintage: number | null; color: string | null; dbQty: number }[];
-  newInPhotos: DetectedBottle[];
+  newInPhotos: (DetectedBottle & { candidates: Candidate[] })[];
 }
 
 function resizeImage(file: File): Promise<string> {
@@ -68,7 +77,7 @@ export default function CellarAuditPage() {
   // Per-row action state — key by wineId (for db rows) or "new-N" (for newInPhotos)
   const [missingActions, setMissingActions] = useState<Record<number, "consume" | "keep">>({});
   const [mismatchActions, setMismatchActions] = useState<Record<number, "adjust" | "keep">>({});
-  const [newActions, setNewActions] = useState<Record<number, "add" | "skip">>({});
+  const [newActions, setNewActions] = useState<Record<number, { kind: "add" | "skip" | "merge"; mergeWineId?: number }>>({});
   const [applyResult, setApplyResult] = useState<{ applied: number; failed: number } | null>(null);
 
   const [resizing, setResizing] = useState({ done: 0, total: 0 });
@@ -137,7 +146,9 @@ export default function CellarAuditPage() {
         const i = cursor++;
         if (i >= photos.length) return;
         const bottles = await scanOnePhoto(photos[i]);
-        perPhotoBottles[i] = bottles;
+        // Tag each detected bottle with its source image so the review UI
+        // can show a thumbnail and the user can verify visually.
+        perPhotoBottles[i] = bottles.map((b) => ({ ...b, sourceImageIndex: i }));
         if (bottles.length === 0) failed++;
         setScanProgress((p) => ({ done: p.done + 1, total: p.total, failed }));
       }
@@ -164,8 +175,8 @@ export default function CellarAuditPage() {
       data.quantityMismatches.forEach((m: { wineId: number }) => { qa[m.wineId] = "adjust"; });
       setMismatchActions(qa);
 
-      const na: Record<number, "add" | "skip"> = {};
-      data.newInPhotos.forEach((_: unknown, i: number) => { na[i] = "add"; });
+      const na: Record<number, { kind: "add" | "skip" | "merge"; mergeWineId?: number }> = {};
+      data.newInPhotos.forEach((_: unknown, i: number) => { na[i] = { kind: "add" }; });
       setNewActions(na);
 
       setPhase("review");
@@ -198,7 +209,8 @@ export default function CellarAuditPage() {
     });
 
     diff.newInPhotos.forEach((d, i) => {
-      if (newActions[i] === "add") {
+      const a = newActions[i] || { kind: "add" };
+      if (a.kind === "add") {
         actions.push({
           type: "create",
           newWine: {
@@ -210,6 +222,8 @@ export default function CellarAuditPage() {
             quantity: d.quantity,
           },
         });
+      } else if (a.kind === "merge" && a.mergeWineId != null) {
+        actions.push({ type: "increment", wineId: a.mergeWineId, deltaQty: d.quantity });
       }
     });
 
@@ -398,7 +412,12 @@ export default function CellarAuditPage() {
         {diff.quantityMismatches.length > 0 && (
           <Section title={`Count mismatch (${diff.quantityMismatches.length})`} subtitle="DB and photos disagree on how many.">
             {diff.quantityMismatches.map((m) => (
-              <Row key={m.wineId}>
+              <div key={m.wineId} className="px-3 py-3 border-b border-border-subtle last:border-b-0 flex items-center gap-3">
+                {m.sourceImageIndex != null && photos[m.sourceImageIndex] && (
+                  <a href={photos[m.sourceImageIndex]} target="_blank" rel="noreferrer" className="flex-shrink-0">
+                    <img src={photos[m.sourceImageIndex]} alt="" className="w-12 h-12 object-cover rounded-md border border-border-subtle" />
+                  </a>
+                )}
                 <RowInfo
                   title={m.name}
                   detail={`DB has ${m.dbQty}, photos show ${m.detectedQty}`}
@@ -413,32 +432,64 @@ export default function CellarAuditPage() {
                   ]}
                   onChange={(v) => setMismatchActions((s) => ({ ...s, [m.wineId]: v as "adjust" | "keep" }))}
                 />
-              </Row>
+              </div>
             ))}
           </Section>
         )}
 
         {/* New in photos */}
         {diff.newInPhotos.length > 0 && (
-          <Section title={`In photos but not in DB (${diff.newInPhotos.length})`} subtitle="New bottles AI saw that aren't in your collection.">
-            {diff.newInPhotos.map((d, i) => (
-              <Row key={i}>
-                <RowInfo
-                  title={d.name}
-                  detail={[d.winery, d.vintage ? String(d.vintage) : null, d.varietal].filter(Boolean).join(" · ")}
-                  badge={`x${d.quantity}`}
-                  confidence={d.confidence}
-                />
-                <ActionToggle
-                  value={newActions[i] || "add"}
-                  options={[
-                    { value: "add", label: "Add to cellar" },
-                    { value: "skip", label: "Skip" },
-                  ]}
-                  onChange={(v) => setNewActions((s) => ({ ...s, [i]: v as "add" | "skip" }))}
-                />
-              </Row>
-            ))}
+          <Section title={`In photos but not in DB (${diff.newInPhotos.length})`} subtitle="If one of these is actually a wine you already have, pick 'Merge into…' instead of 'Add'.">
+            {diff.newInPhotos.map((d, i) => {
+              const action = newActions[i] || { kind: "add" as const };
+              const sel = action.kind === "merge" && action.mergeWineId != null
+                ? `merge-${action.mergeWineId}`
+                : action.kind;
+              return (
+                <div key={i} className="px-3 py-3 border-b border-border-subtle last:border-b-0 flex items-center gap-3">
+                  {d.sourceImageIndex != null && photos[d.sourceImageIndex] && (
+                    <a href={photos[d.sourceImageIndex]} target="_blank" rel="noreferrer" className="flex-shrink-0">
+                      <img src={photos[d.sourceImageIndex]} alt="" className="w-12 h-12 object-cover rounded-md border border-border-subtle" />
+                    </a>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-medium text-text-primary truncate">{d.name}</span>
+                      <span className="text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded text-gold bg-gold-muted">×{d.quantity}</span>
+                      {d.confidence != null && (
+                        <span className={`text-[10px] tabular-nums ${d.confidence >= 0.8 ? "text-success" : d.confidence >= 0.5 ? "text-gold" : "text-danger"}`}>
+                          {Math.round(d.confidence * 100)}%
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-text-tertiary truncate mt-0.5">
+                      {[d.winery, d.vintage ? String(d.vintage) : null, d.varietal].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                  <select
+                    value={sel}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "add" || v === "skip") {
+                        setNewActions((s) => ({ ...s, [i]: { kind: v } }));
+                      } else if (v.startsWith("merge-")) {
+                        const wineId = parseInt(v.slice("merge-".length));
+                        setNewActions((s) => ({ ...s, [i]: { kind: "merge", mergeWineId: wineId } }));
+                      }
+                    }}
+                    className="bg-surface border border-border-subtle text-[11px] text-text-primary px-2 py-1 rounded focus:outline-none focus:border-gold/30 max-w-[180px]"
+                  >
+                    <option value="add">Add as new</option>
+                    {d.candidates.map((c) => (
+                      <option key={c.wineId} value={`merge-${c.wineId}`}>
+                        Merge into: {c.name.length > 24 ? c.name.slice(0, 22) + "…" : c.name}
+                      </option>
+                    ))}
+                    <option value="skip">Skip</option>
+                  </select>
+                </div>
+              );
+            })}
           </Section>
         )}
 

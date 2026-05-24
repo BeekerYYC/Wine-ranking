@@ -3,9 +3,12 @@ import { prisma } from "@/lib/db";
 
 interface ApplyAction {
   type: "decrement" | "increment" | "create" | "ignore";
-  wineId?: number;          // for decrement / increment
-  deltaQty?: number;        // for decrement (positive number to subtract) / increment (positive number to add)
-  newWine?: {               // for create
+  // "increment" is also used when the audit UI's "merge into existing"
+  // resolves a new-in-photos row to a DB wine: same operation as adjusting
+  // up a quantity mismatch.
+  wineId?: number;
+  deltaQty?: number;
+  newWine?: {
     name: string;
     winery: string | null;
     vintage: number | null;
