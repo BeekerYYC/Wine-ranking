@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { normalizeColor } from "@/lib/colors";
 
 export async function GET(req: NextRequest) {
   const category = req.nextUrl.searchParams.get("category") || "wine";
@@ -57,7 +58,8 @@ export async function GET(req: NextRequest) {
 
   const colorMap: Record<string, number> = {};
   wines.forEach((w) => {
-    if (w.color) colorMap[w.color] = (colorMap[w.color] || 0) + 1;
+    const c = normalizeColor(w.color);
+    if (c) colorMap[c] = (colorMap[c] || 0) + 1;
   });
   const colorBreakdown = Object.entries(colorMap)
     .map(([name, count]) => ({ name, count }))

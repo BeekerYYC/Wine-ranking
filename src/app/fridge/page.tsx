@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
+import { normalizeColor } from "@/lib/colors";
 import ConsumeModal from "@/components/ConsumeModal";
 import FindLabelsModal from "@/components/FindLabelsModal";
 
@@ -87,7 +88,7 @@ export default function FridgePage() {
 
   const filtered = useMemo(() => {
     return wines.filter((w) => {
-      if (colorFilter && w.color !== colorFilter) return false;
+      if (colorFilter && normalizeColor(w.color) !== colorFilter) return false;
       if (search) {
         const q = search.toLowerCase();
         const text = `${w.name} ${w.winery ?? ""} ${w.varietal ?? ""} ${w.region ?? ""}`.toLowerCase();
@@ -100,7 +101,7 @@ export default function FridgePage() {
   const counts = useMemo(() => {
     const result: Record<string, number> = { all: wines.length };
     config.types.forEach((t) => {
-      result[t.value] = wines.filter((w) => w.color === t.value).length;
+      result[t.value] = wines.filter((w) => normalizeColor(w.color) === t.value).length;
     });
     return result;
   }, [wines, config.types]);
