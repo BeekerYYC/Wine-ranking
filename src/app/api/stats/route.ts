@@ -100,6 +100,21 @@ export async function GET(req: NextRequest) {
     .map(([month, count]) => ({ month, count }))
     .sort((a, b) => a.month.localeCompare(b.month));
 
+  // Time-windowed counts for dashboard deltas
+  const now = Date.now();
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const monthMs = 30 * 24 * 60 * 60 * 1000;
+  const addedThisWeek = wines.filter((w) => now - new Date(w.createdAt).getTime() < weekMs).length;
+  const addedThisMonth = wines.filter((w) => now - new Date(w.createdAt).getTime() < monthMs).length;
+  const consumedThisMonthFromLogs = consumptionLogs.filter(
+    (l) => now - new Date(l.createdAt).getTime() < monthMs,
+  ).length;
+  const consumedThisMonthFromFlag = wines.filter(
+    (w) => w.consumedAt && now - new Date(w.consumedAt).getTime() < monthMs,
+  ).length;
+  // Logs may be incomplete for pre-feature data — fall back to consumedAt flag.
+  const consumedThisMonth = Math.max(consumedThisMonthFromLogs, consumedThisMonthFromFlag);
+
   const ratingDist = [1, 2, 3, 4, 5].map((r) => ({
     rating: r,
     count: wines.filter((w) => w.rating === r).length,
@@ -203,6 +218,7 @@ export async function GET(req: NextRequest) {
     varietalBreakdown, colorBreakdown, countryBreakdown,
     priceRating, monthlyAdditions, ratingDist, topWines, bestValue,
     uniqueVarietals, uniqueRegions, uniqueCountries,
+    addedThisWeek, addedThisMonth, consumedThisMonth,
     wineOfDay: wineOfDay ? { id: wineOfDay.id, name: wineOfDay.name, winery: wineOfDay.winery, rating: wineOfDay.rating, imageData: wineOfDay.imageData, labelImageUrl: wineOfDay.labelImageUrl, color: wineOfDay.color, vintage: wineOfDay.vintage } : null,
     onThisDay: onThisDay.map((w) => ({ id: w.id, name: w.name, winery: w.winery, createdAt: w.createdAt, rating: w.rating })),
     recentActivity,

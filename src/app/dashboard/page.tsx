@@ -39,6 +39,9 @@ interface Stats {
   uniqueVarietals: number;
   uniqueRegions: number;
   uniqueCountries: number;
+  addedThisWeek: number;
+  addedThisMonth: number;
+  consumedThisMonth: number;
   varietalBreakdown: { name: string; count: number }[];
   colorBreakdown: { name: string; count: number }[];
   countryBreakdown: { name: string; count: number }[];
@@ -205,8 +208,8 @@ export default function Dashboard() {
           </select>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <OverviewMetric icon={<IconBottle />} value={stats.inCollection} label="Wines in Cellar" delta={`+${monthlyData[monthlyData.length - 1]?.count || 0} this week`} />
-          <OverviewMetric icon={<IconWineGlass />} value={stats.consumedBottles ?? stats.consumed} label="Bottles Consumed" delta={`+${monthlyData[monthlyData.length - 1]?.count || 0} this month`} />
+          <OverviewMetric icon={<IconBottle />} value={stats.inCollection} label="Bottles in Cellar" delta={stats.addedThisWeek > 0 ? `+${stats.addedThisWeek} this week` : "No additions this week"} />
+          <OverviewMetric icon={<IconWineGlass />} value={stats.consumedBottles ?? stats.consumed} label="Bottles Consumed" delta={stats.consumedThisMonth > 0 ? `+${stats.consumedThisMonth} this month` : "None this month"} />
           <OverviewMetric icon={<IconGrape />} value={stats.uniqueRegions} label="Regions" delta={stats.uniqueCountries > 0 ? `${stats.uniqueCountries} countries` : ""} />
           <OverviewMetric icon={<IconTag />} value={`$${stats.totalSpent.toLocaleString()}`} label="Est. Collection Value" delta={`Avg $${Math.round(stats.avgPrice)}`} />
         </div>
