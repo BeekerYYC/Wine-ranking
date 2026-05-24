@@ -147,10 +147,15 @@ export async function POST(
       });
     } else {
       const [first, ...rest] = bottles;
+      // Keep the source photo on every derived scan item so the reviewer can
+      // see what the AI was looking at and audit visually. Multi-bottle photos
+      // used to null this out to save DB space — but the user can't verify
+      // partial-visibility labels without the picture.
+      const sourceImage = pendingItem.imageData;
       await prisma.scanItem.update({
         where: { id: pendingItem.id },
         data: {
-          status: "analyzed", imageData: null,
+          status: "analyzed",
           name: first.name || null, winery: first.winery || null,
           vintage: first.vintage ? parseInt(first.vintage) : null,
           varietal: first.varietal || null, region: first.region || null,
@@ -166,7 +171,7 @@ export async function POST(
         await prisma.scanItem.createMany({
           data: rest.map((b: Record<string, unknown>) => ({
             batchId: id, sourceIndex: pendingItem.sourceIndex,
-            imageData: null, status: "analyzed",
+            imageData: sourceImage, status: "analyzed",
             name: (b.name as string) || null, winery: (b.winery as string) || null,
             vintage: b.vintage ? parseInt(String(b.vintage)) : null,
             varietal: (b.varietal as string) || null, region: (b.region as string) || null,
