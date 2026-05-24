@@ -8,6 +8,9 @@ interface ApplyAction {
   // up a quantity mismatch.
   wineId?: number;
   deltaQty?: number;
+  // Source photo from the audit — saved on the wine for "create", and
+  // backfilled onto the target wine for "increment" when it has no image yet.
+  imageData?: string | null;
   newWine?: {
     name: string;
     winery: string | null;
@@ -73,6 +76,9 @@ export async function POST(req: NextRequest) {
         data: {
           quantity: wine.quantity + action.deltaQty,
           status: "collection",
+          // Backfill the photo if the target had none yet — but never overwrite
+          // an existing user photo.
+          ...(action.imageData && !wine.imageData ? { imageData: action.imageData } : {}),
         },
       });
       results.push({ type: "increment", wineId: updated.id, ok: true, detail: `qty ${wine.quantity} → ${updated.quantity}` });
@@ -91,6 +97,7 @@ export async function POST(req: NextRequest) {
           color: w.color,
           quantity: Math.max(1, w.quantity),
           status: "collection",
+          imageData: action.imageData ?? null,
         },
       });
       results.push({ type: "create", wineId: created.id, ok: true, detail: w.name });
