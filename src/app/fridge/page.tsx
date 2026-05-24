@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
+import { normalizeColor } from "@/lib/colors";
 import ConsumeModal from "@/components/ConsumeModal";
+import FindLabelsModal from "@/components/FindLabelsModal";
 
 interface Wine {
   id: number;
@@ -58,7 +60,7 @@ function extractTopScore(criticReviews?: string | null): { score: number; source
 }
 
 export default function FridgePage() {
-  const { config } = useCategory();
+  const { category, config } = useCategory();
   const [wines, setWines] = useState<Wine[]>([]);
   const [loading, setLoading] = useState(true);
   const [colorFilter, setColorFilter] = useState<string>("");
@@ -67,12 +69,18 @@ export default function FridgePage() {
   const [consumeWine, setConsumeWine] = useState<Wine | null>(null);
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  const [missingImageCount, setMissingImageCount] = useState(0);
+  const [showFindLabels, setShowFindLabels] = useState(false);
 
   const fetchWines = () => {
     setLoading(true);
     fetch(`/api/wines?status=collection&sort=${sort}&order=${sort === "name" ? "asc" : "desc"}`)
       .then((r) => r.json())
-      .then((data: Wine[]) => setWines(data.filter((w) => w.quantity > 0)))
+      .then((data: Wine[]) => {
+        const inCollection = data.filter((w) => w.quantity > 0);
+        setWines(inCollection);
+        setMissingImageCount(inCollection.filter((w) => !w.imageData && !w.labelImageUrl).length);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -80,7 +88,7 @@ export default function FridgePage() {
 
   const filtered = useMemo(() => {
     return wines.filter((w) => {
-      if (colorFilter && w.color !== colorFilter) return false;
+      if (colorFilter && normalizeColor(w.color) !== colorFilter) return false;
       if (search) {
         const q = search.toLowerCase();
         const text = `${w.name} ${w.winery ?? ""} ${w.varietal ?? ""} ${w.region ?? ""}`.toLowerCase();
@@ -93,7 +101,7 @@ export default function FridgePage() {
   const counts = useMemo(() => {
     const result: Record<string, number> = { all: wines.length };
     config.types.forEach((t) => {
-      result[t.value] = wines.filter((w) => w.color === t.value).length;
+      result[t.value] = wines.filter((w) => normalizeColor(w.color) === t.value).length;
     });
     return result;
   }, [wines, config.types]);
@@ -128,6 +136,18 @@ export default function FridgePage() {
           <p className="text-[13px] text-text-tertiary mt-1">Your curated collection ready to enjoy.</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {missingImageCount > 0 && (
+            <button
+              onClick={() => setShowFindLabels(true)}
+              title={`Find label images for ${missingImageCount} bottle${missingImageCount !== 1 ? "s" : ""}`}
+              className="h-10 px-3 rounded-xl border bg-gold-muted border-gold/30 text-gold hover:bg-gold/20 transition-all flex items-center gap-1.5"
+            >
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+              </svg>
+              <span className="text-[12px] font-semibold tabular-nums">{missingImageCount}</span>
+            </button>
+          )}
           <button
             onClick={() => setShowSearch(!showSearch)}
             className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${
@@ -277,6 +297,14 @@ export default function FridgePage() {
 
       {consumeWine && (
         <ConsumeModal wine={consumeWine} onConfirm={handleConsume} onClose={() => setConsumeWine(null)} />
+      )}
+
+      {showFindLabels && (
+        <FindLabelsModal
+          category={category}
+          onClose={() => setShowFindLabels(false)}
+          onComplete={fetchWines}
+        />
       )}
     </div>
   );
