@@ -341,18 +341,20 @@ const BottleMicro = () => (
 function PremiumWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => void }) {
   const score = extractTopScore(wine.criticReviews) || (wine.onlineRating ? { score: Math.round(wine.onlineRating), source: "AI" } : null);
   const dotColor = wine.color ? COLOR_DOTS[wine.color] : null;
+  const [labelFailed, setLabelFailed] = useState(false);
+  const src = wine.imageData || (wine.labelImageUrl && !labelFailed ? wine.labelImageUrl : null);
 
   return (
     <div className="relative bg-surface-raised border border-border-subtle hover:border-gold/30 rounded-2xl overflow-hidden transition-all group">
       <a href={`/wine/${wine.id}`} className="block p-3.5">
         {/* Top row: bottle image + actions */}
         <div className="relative h-[140px] -mx-1 mb-3 flex items-center justify-center">
-          {wine.imageData || wine.labelImageUrl ? (
+          {src ? (
             <img
-              src={wine.imageData || wine.labelImageUrl || ""}
+              src={src}
               alt={wine.name}
               className="h-full object-contain drop-shadow-lg"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              onError={() => { if (!wine.imageData) setLabelFailed(true); }}
             />
           ) : (
             <BottleSilhouette color={dotColor} />
@@ -430,12 +432,14 @@ function PremiumWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => voi
 
 function ListWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => void }) {
   const score = extractTopScore(wine.criticReviews) || (wine.onlineRating ? { score: Math.round(wine.onlineRating), source: "AI" } : null);
+  const [labelFailed, setLabelFailed] = useState(false);
+  const src = wine.imageData || (wine.labelImageUrl && !labelFailed ? wine.labelImageUrl : null);
   return (
     <div className="bg-surface-raised border border-border-subtle hover:border-gold/30 rounded-2xl transition-all group flex">
       <a href={`/wine/${wine.id}`} className="flex-1 flex gap-3 p-3 min-w-0">
         <div className="w-14 h-20 flex-shrink-0 flex items-center justify-center">
-          {wine.imageData || wine.labelImageUrl ? (
-            <img src={wine.imageData || wine.labelImageUrl || ""} alt={wine.name} className="h-full object-contain" />
+          {src ? (
+            <img src={src} alt={wine.name} className="h-full object-contain" onError={() => { if (!wine.imageData) setLabelFailed(true); }} />
           ) : (
             <BottleSilhouette color={wine.color ? COLOR_DOTS[wine.color] : null} small />
           )}
