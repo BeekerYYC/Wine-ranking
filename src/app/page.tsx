@@ -115,7 +115,7 @@ export default function Home() {
               </div>
               <span className="text-[13px] font-medium text-text-secondary">My {config.fridgeLabel}</span>
             </div>
-            <p className="font-serif text-[40px] font-semibold leading-none">{stats?.totalBottles ?? "—"}</p>
+            <p className="font-serif text-[40px] font-semibold leading-none">{stats?.inCollection ?? "—"}</p>
             <p className="text-[12px] text-text-tertiary mt-1">Bottles</p>
             <p className="text-[11px] text-text-muted mt-3">
               {newThisWeek > 0 ? `${newThisWeek} new this week` : "View collection"}
