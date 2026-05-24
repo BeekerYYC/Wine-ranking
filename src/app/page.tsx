@@ -55,7 +55,7 @@ export default function Home() {
   useEffect(() => {
     fetch(`/api/wines?sort=createdAt&order=desc`)
       .then((r) => r.json())
-      .then((data: Wine[]) => setWines(data.slice(0, 8)));
+      .then((data: Wine[]) => setWines(data));
     fetch(`/api/stats`)
       .then((r) => r.json())
       .then(setStats);
