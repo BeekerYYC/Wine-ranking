@@ -34,7 +34,9 @@ function resizeImage(file: File): Promise<string> {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const maxSize = 1280;
+        // 1024 max + 0.78 quality keeps each photo well under the 4.5MB
+        // Vercel request body limit when sending one per request.
+        const maxSize = 1024;
         let { width, height } = img;
         if (width > maxSize || height > maxSize) {
           const ratio = Math.min(maxSize / width, maxSize / height);
@@ -44,7 +46,7 @@ function resizeImage(file: File): Promise<string> {
         canvas.width = width;
         canvas.height = height;
         canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.8));
+        resolve(canvas.toDataURL("image/jpeg", 0.78));
       };
       img.src = reader.result;
     };
@@ -61,6 +63,7 @@ export default function CellarAuditPage() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [diff, setDiff] = useState<DiffResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [scanProgress, setScanProgress] = useState({ done: 0, total: 0, failed: 0 });
 
   // Per-row action state — key by wineId (for db rows) or "new-N" (for newInPhotos)
   const [missingActions, setMissingActions] = useState<Record<number, "consume" | "keep">>({});
@@ -78,6 +81,28 @@ export default function CellarAuditPage() {
 
   const removePhoto = (idx: number) => setPhotos((prev) => prev.filter((_, i) => i !== idx));
 
+  // Scan one photo with up to two retries on transient failure.
+  const scanOnePhoto = async (img: string, attempts = 3): Promise<DetectedBottle[]> => {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const res = await fetch("/api/audit/scan-one", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: img }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          return Array.isArray(data.bottles) ? data.bottles : [];
+        }
+        // 429 (rate limit) — back off before retrying
+        if (res.status === 429) await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
+      } catch {
+        await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+      }
+    }
+    return [];
+  };
+
   const runAudit = async () => {
     if (photos.length === 0) {
       setError("Add at least one photo");
@@ -85,17 +110,39 @@ export default function CellarAuditPage() {
     }
     setError(null);
     setPhase("analyzing");
+    setScanProgress({ done: 0, total: photos.length, failed: 0 });
+
+    // Fan out with a concurrency limit of 4 — keeps within typical API rate
+    // limits and the browser's per-origin connection cap.
+    const concurrency = 4;
+    const perPhotoBottles: DetectedBottle[][] = new Array(photos.length);
+    let failed = 0;
+    let cursor = 0;
+
+    const worker = async () => {
+      while (true) {
+        const i = cursor++;
+        if (i >= photos.length) return;
+        const bottles = await scanOnePhoto(photos[i]);
+        perPhotoBottles[i] = bottles;
+        if (bottles.length === 0) failed++;
+        setScanProgress((p) => ({ done: p.done + 1, total: p.total, failed }));
+      }
+    };
+
+    await Promise.all(Array.from({ length: Math.min(concurrency, photos.length) }, worker));
+
+    // Compute diff against DB
     try {
-      const res = await fetch("/api/audit/diff", {
+      const res = await fetch("/api/audit/compute-diff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images: photos, category }),
+        body: JSON.stringify({ perPhotoBottles, category }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Audit failed");
+      if (!res.ok) throw new Error(data.error || "Diff failed");
       setDiff(data);
 
-      // Default actions: suggest consume for missing, adjust for mismatch, add for new
       const ma: Record<number, "consume" | "keep"> = {};
       data.missingFromPhotos.forEach((m: { wineId: number }) => { ma[m.wineId] = "consume"; });
       setMissingActions(ma);
@@ -250,14 +297,21 @@ export default function CellarAuditPage() {
 
   // --- ANALYZING PHASE ---
   if (phase === "analyzing") {
+    const pct = scanProgress.total > 0 ? Math.round((scanProgress.done / scanProgress.total) * 100) : 0;
     return (
       <div className="max-w-lg mx-auto py-12 text-center">
         <div className="w-16 h-16 rounded-2xl bg-gold-muted flex items-center justify-center mx-auto mb-4">
           <div className="animate-spin w-7 h-7 border-2 border-gold border-t-transparent rounded-full" />
         </div>
-        <h1 className="text-xl font-bold text-text-primary mb-2">Analyzing {photos.length} photo{photos.length !== 1 ? "s" : ""}</h1>
-        <p className="text-[13px] text-text-tertiary">Running Claude vision across all photos in parallel...</p>
-        <p className="text-[11px] text-text-muted mt-2">~5–10s per photo</p>
+        <h1 className="text-xl font-bold text-text-primary mb-2">Analyzing photos</h1>
+        <div className="bg-surface-raised rounded-full h-2 mb-2 overflow-hidden">
+          <div className="bg-gold h-full rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+        </div>
+        <p className="text-[12px] text-text-tertiary tabular-nums">
+          {scanProgress.done} of {scanProgress.total} done
+          {scanProgress.failed > 0 ? ` · ${scanProgress.failed} unreadable` : ""}
+        </p>
+        <p className="text-[11px] text-text-muted mt-3">Sending one photo at a time, 4 in parallel.</p>
       </div>
     );
   }
