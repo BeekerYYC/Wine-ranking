@@ -1,7 +1,7 @@
 "use client";
 
 import StarRating from "./StarRating";
-import WineBottlePlaceholder from "./WineBottlePlaceholder";
+import WineImage from "./WineImage";
 import { useCategory } from "@/lib/CategoryContext";
 import { normalizeColor } from "@/lib/colors";
 
@@ -43,17 +43,16 @@ export default function WineCard({
     <div className="group relative bg-surface-raised hover:bg-surface-overlay rounded-xl border border-border-subtle hover:border-border transition-all duration-200">
       <a href={`/wine/${wine.id}`} className="flex gap-3.5 p-3.5">
         {/* Image: prefer user photo, fall back to AI-found label, then placeholder */}
-        {wine.imageData || wine.labelImageUrl ? (
-          <img
-            src={wine.imageData || wine.labelImageUrl || ""}
+        <div className="flex-shrink-0 w-12 h-16 flex items-center justify-center">
+          <WineImage
+            imageData={wine.imageData}
+            labelImageUrl={wine.labelImageUrl}
             alt={wine.name}
-            className="w-12 h-16 object-cover rounded-lg flex-shrink-0"
+            color={wine.color}
+            placeholderSize="sm"
+            className="w-12 h-16 object-cover rounded-lg"
           />
-        ) : (
-          <div className="flex-shrink-0">
-            <WineBottlePlaceholder color={wine.color} size="sm" />
-          </div>
-        )}
+        </div>
 
         {/* Info */}
         <div className="flex-1 min-w-0 py-0.5">

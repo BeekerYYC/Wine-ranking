@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from "recharts";
+import WineImage from "@/components/WineImage";
 
 interface Wine {
   id: number;
@@ -179,15 +180,14 @@ export default function Home() {
                 className="flex-shrink-0 w-[180px] rounded-2xl overflow-hidden bg-surface-raised border border-border-subtle hover:border-gold/30 transition-all group"
               >
                 <div className="h-[160px] bg-gradient-to-br from-surface-overlay to-surface relative overflow-hidden flex items-center justify-center">
-                  {wine.imageData || wine.labelImageUrl ? (
-                    <img
-                      src={wine.imageData || wine.labelImageUrl || ""}
-                      alt={wine.name}
-                      className="h-full object-contain"
-                    />
-                  ) : (
-                    <span className="text-5xl opacity-40">🍷</span>
-                  )}
+                  <WineImage
+                    imageData={wine.imageData}
+                    labelImageUrl={wine.labelImageUrl}
+                    alt={wine.name}
+                    color={wine.color}
+                    className="h-full object-contain"
+                    fallbackEmoji="🍷"
+                  />
                 </div>
                 <div className="p-3">
                   <h3 className="font-serif text-[14px] font-semibold text-text-primary leading-tight line-clamp-2">
