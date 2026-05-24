@@ -71,12 +71,25 @@ export default function CellarAuditPage() {
   const [newActions, setNewActions] = useState<Record<number, "add" | "skip">>({});
   const [applyResult, setApplyResult] = useState<{ applied: number; failed: number } | null>(null);
 
+  const [resizing, setResizing] = useState({ done: 0, total: 0 });
+
   const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    const resized = await Promise.all(files.map(resizeImage));
-    setPhotos((prev) => [...prev, ...resized]);
     e.target.value = "";
+
+    setResizing({ done: 0, total: files.length });
+    // Resize serially — a single raw iPhone photo decoded into a canvas can
+    // hold ~50MB. Doing 24 of them in parallel will OOM mobile Safari and
+    // silently reload the tab.
+    const resized: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const r = await resizeImage(files[i]);
+      resized.push(r);
+      setResizing({ done: i + 1, total: files.length });
+    }
+    setPhotos((prev) => [...prev, ...resized]);
+    setResizing({ done: 0, total: 0 });
   };
 
   const removePhoto = (idx: number) => setPhotos((prev) => prev.filter((_, i) => i !== idx));
@@ -277,6 +290,12 @@ export default function CellarAuditPage() {
                 </button>
               </div>
             )}
+            {resizing.total > 0 && (
+              <div className="mt-3 flex items-center gap-2 text-[11px] text-text-tertiary">
+                <div className="animate-spin w-3 h-3 border-2 border-gold border-t-transparent rounded-full" />
+                <span>Preparing photos… {resizing.done} of {resizing.total}</span>
+              </div>
+            )}
             <p className="text-[11px] text-text-muted mt-2">
               Overlapping photos are fine — duplicates are deduped by max-count. Skip blurry or very obscured bottles; AI will only count what it can confidently identify.
             </p>
@@ -285,7 +304,7 @@ export default function CellarAuditPage() {
           <button
             type="button"
             onClick={runAudit}
-            disabled={photos.length === 0}
+            disabled={photos.length === 0 || resizing.total > 0}
             className="w-full bg-gold/90 hover:bg-gold disabled:opacity-30 text-bg py-3 rounded-lg text-[14px] font-semibold transition-all"
           >
             Run audit ({photos.length} photo{photos.length !== 1 ? "s" : ""})
