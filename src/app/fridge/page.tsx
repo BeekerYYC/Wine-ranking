@@ -99,9 +99,13 @@ export default function FridgePage() {
   }, [wines, colorFilter, search]);
 
   const counts = useMemo(() => {
-    const result: Record<string, number> = { all: wines.length };
+    const result: Record<string, number> = {
+      all: wines.reduce((sum, w) => sum + w.quantity, 0),
+    };
     config.types.forEach((t) => {
-      result[t.value] = wines.filter((w) => normalizeColor(w.color) === t.value).length;
+      result[t.value] = wines
+        .filter((w) => normalizeColor(w.color) === t.value)
+        .reduce((sum, w) => sum + w.quantity, 0);
     });
     return result;
   }, [wines, config.types]);
