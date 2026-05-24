@@ -122,6 +122,15 @@ export default function Sidebar() {
             Add from receipt
           </a>
           <a
+            href="/fridge/audit"
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] text-text-muted hover:text-text-tertiary transition-colors"
+          >
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Audit cellar
+          </a>
+          <a
             href="/api/export"
             download
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] text-text-muted hover:text-text-tertiary transition-colors"
