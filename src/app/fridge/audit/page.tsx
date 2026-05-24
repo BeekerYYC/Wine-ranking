@@ -200,19 +200,22 @@ export default function CellarAuditPage() {
 
     diff.quantityMismatches.forEach((m) => {
       if (mismatchActions[m.wineId] === "adjust") {
+        const sourcePhoto = m.sourceImageIndex != null ? photos[m.sourceImageIndex] : null;
         if (m.delta < 0) {
           actions.push({ type: "decrement", wineId: m.wineId, deltaQty: -m.delta });
         } else if (m.delta > 0) {
-          actions.push({ type: "increment", wineId: m.wineId, deltaQty: m.delta });
+          actions.push({ type: "increment", wineId: m.wineId, deltaQty: m.delta, imageData: sourcePhoto });
         }
       }
     });
 
     diff.newInPhotos.forEach((d, i) => {
       const a = newActions[i] || { kind: "add" };
+      const sourcePhoto = d.sourceImageIndex != null ? photos[d.sourceImageIndex] : null;
       if (a.kind === "add") {
         actions.push({
           type: "create",
+          imageData: sourcePhoto,
           newWine: {
             name: d.name,
             winery: d.winery,
@@ -223,18 +226,41 @@ export default function CellarAuditPage() {
           },
         });
       } else if (a.kind === "merge" && a.mergeWineId != null) {
-        actions.push({ type: "increment", wineId: a.mergeWineId, deltaQty: d.quantity });
+        actions.push({ type: "increment", wineId: a.mergeWineId, deltaQty: d.quantity, imageData: sourcePhoto });
       }
     });
 
+    // Batch the apply calls — each action may carry a ~150KB base64 photo,
+    // so we'd hit Vercel's 4.5MB body limit if we POST everything at once.
+    // Estimate JSON size per action; chunk so each batch stays under ~2MB.
+    const MAX_BATCH_BYTES = 2_000_000;
+    let totalApplied = 0;
+    let totalFailed = 0;
     try {
-      const res = await fetch("/api/audit/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ actions, category }),
-      });
-      const data = await res.json();
-      setApplyResult({ applied: data.applied || 0, failed: data.failed || 0 });
+      let batch: Record<string, unknown>[] = [];
+      let batchBytes = 0;
+      const flush = async () => {
+        if (batch.length === 0) return;
+        const res = await fetch("/api/audit/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ actions: batch, category }),
+        });
+        const data = await res.json();
+        totalApplied += data.applied || 0;
+        totalFailed += data.failed || 0;
+        batch = [];
+        batchBytes = 0;
+      };
+      for (const a of actions) {
+        // Cheap size estimate: imageData (if any) is the dominant cost.
+        const size = (typeof a.imageData === "string" ? a.imageData.length : 0) + 256;
+        if (batchBytes + size > MAX_BATCH_BYTES && batch.length > 0) await flush();
+        batch.push(a);
+        batchBytes += size;
+      }
+      await flush();
+      setApplyResult({ applied: totalApplied, failed: totalFailed });
       setPhase("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Apply failed");
