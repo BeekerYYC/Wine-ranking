@@ -3,6 +3,7 @@
 import StarRating from "./StarRating";
 import WineBottlePlaceholder from "./WineBottlePlaceholder";
 import { useCategory } from "@/lib/CategoryContext";
+import { normalizeColor } from "@/lib/colors";
 
 interface Wine {
   id: number;
@@ -34,7 +35,8 @@ export default function WineCard({
   onQuickConsume?: (id: number) => void;
 }) {
   const { config } = useCategory();
-  const typeEntry = config.types.find((t) => t.value === wine.color);
+  const normalizedColor = normalizeColor(wine.color);
+  const typeEntry = config.types.find((t) => t.value === normalizedColor);
   const dotColor = typeEntry?.dotColor || "#4a4640";
 
   return (
