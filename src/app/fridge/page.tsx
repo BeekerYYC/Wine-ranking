@@ -387,11 +387,20 @@ function PremiumWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => voi
           {[wine.region, wine.country].filter(Boolean).join(", ")}{wine.vintage && ` · ${wine.vintage}`}
         </p>
 
-        {/* Score badge */}
-        {score && (
-          <div className="inline-flex items-center bg-pink-muted border border-pink/20 rounded-md px-2 py-0.5 mb-2">
-            <span className="text-[12px] font-bold text-pink tabular-nums">{score.score}</span>
-            <span className="text-[9px] text-pink/70 ml-1 font-medium tracking-wider">{score.source}</span>
+        {/* Score + price badges */}
+        {(score || wine.price != null) && (
+          <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+            {score && (
+              <div className="inline-flex items-center bg-pink-muted border border-pink/20 rounded-md px-2 py-0.5">
+                <span className="text-[12px] font-bold text-pink tabular-nums">{score.score}</span>
+                <span className="text-[9px] text-pink/70 ml-1 font-medium tracking-wider">{score.source}</span>
+              </div>
+            )}
+            {wine.price != null && (
+              <span className="inline-flex items-center bg-gold-muted border border-gold/20 rounded-md px-2 py-0.5 text-[12px] font-semibold text-gold tabular-nums">
+                ${wine.price.toFixed(wine.price % 1 === 0 ? 0 : 2)}
+              </span>
+            )}
           </div>
         )}
 
