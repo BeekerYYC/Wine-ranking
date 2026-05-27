@@ -41,6 +41,8 @@ export default function WineDetail() {
   const [quantity, setQuantity] = useState(1);
   const [saving, setSaving] = useState(false);
   const [findingImage, setFindingImage] = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichError, setEnrichError] = useState<string | null>(null);
   const [showConsume, setShowConsume] = useState(false);
 
   useEffect(() => {
@@ -96,6 +98,27 @@ export default function WineDetail() {
       }
     } finally {
       setFindingImage(false);
+    }
+  };
+
+  const handleEnrich = async () => {
+    setEnriching(true);
+    setEnrichError(null);
+    try {
+      const res = await fetch(`/api/wines/${id}/enrich`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.wine) {
+        // Preserve fields the enrich endpoint doesn't return (relations like
+        // consumptions/store/list aren't in the findUnique response, so they
+        // don't appear on data.wine and the spread leaves prev's values intact)
+        setWine((prev) => prev ? { ...prev, ...data.wine } : data.wine);
+      } else {
+        setEnrichError(data.error || `Enrichment failed (${res.status})`);
+      }
+    } catch (e) {
+      setEnrichError(e instanceof Error ? e.message : "Enrichment failed");
+    } finally {
+      setEnriching(false);
     }
   };
 
@@ -308,6 +331,45 @@ export default function WineDetail() {
           <p className="text-[12px] text-text-secondary leading-relaxed">{wine.description}</p>
         </section>
       )}
+
+      {/* AI enrichment trigger — prominent CTA when empty, small refresh link when populated */}
+      {(() => {
+        const hasAI = !!(wine.tastingNotes || wine.criticReviews || wine.description || wine.foodPairings || wine.drinkingWindow);
+        if (!hasAI) {
+          return (
+            <section className="bg-gold-muted/30 border border-gold/15 rounded-xl p-4 mb-2.5 text-center">
+              <p className="text-[12px] text-text-secondary mb-2">No AI details yet for this {config.itemName}.</p>
+              <button
+                onClick={handleEnrich}
+                disabled={enriching}
+                className="inline-flex items-center gap-2 bg-gold/90 hover:bg-gold disabled:opacity-50 text-bg px-4 py-2 rounded-lg text-[12px] font-semibold transition-colors"
+              >
+                {enriching ? (
+                  <>
+                    <div className="animate-spin w-3.5 h-3.5 border-2 border-bg border-t-transparent rounded-full" />
+                    Enriching...
+                  </>
+                ) : (
+                  <>✨ Enrich with AI</>
+                )}
+              </button>
+              {enrichError && <p className="text-[11px] text-danger mt-2">{enrichError}</p>}
+            </section>
+          );
+        }
+        return (
+          <div className="flex justify-center items-center gap-3 mb-2.5">
+            <button
+              onClick={handleEnrich}
+              disabled={enriching}
+              className="text-[11px] text-text-muted hover:text-gold disabled:opacity-50 transition-colors"
+            >
+              {enriching ? "Refreshing AI data..." : "↻ Refresh AI data"}
+            </button>
+            {enrichError && <p className="text-[11px] text-danger">{enrichError}</p>}
+          </div>
+        );
+      })()}
 
       {/* Consumption History */}
       {wine.consumptions && wine.consumptions.length > 0 && (
