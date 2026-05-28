@@ -4,6 +4,8 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const anthropic = new Anthropic();
 
+export const maxDuration = 60;
+
 const SCAN_PROMPTS: Record<string, string> = {
   wine: `Analyze this wine image. It may show a SINGLE bottle or MULTIPLE bottles (e.g. a wine fridge shelf/drawer).
 
