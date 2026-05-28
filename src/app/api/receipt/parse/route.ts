@@ -3,6 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const anthropic = new Anthropic();
 
+export const maxDuration = 60;
+
 const COLOR_VALUES: Record<string, string[]> = {
   wine: ["red", "white", "rosé", "sparkling", "dessert", "orange"],
   coffee: ["light", "medium", "medium-dark", "dark", "espresso", "decaf"],

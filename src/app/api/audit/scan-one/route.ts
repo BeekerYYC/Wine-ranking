@@ -3,6 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const anthropic = new Anthropic();
 
+export const maxDuration = 60;
+
 const DETECT_PROMPT = `Identify every distinct wine bottle visible in this fridge/cellar photo.
 
 Return a JSON array. One object per UNIQUE wine — if multiple bottles of the same wine are visible, set quantity to the count rather than repeating the entry.

@@ -3,6 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const anthropic = new Anthropic();
 
+export const maxDuration = 60;
+
 const PROMPTS: Record<string, string> = {
   wine: `You are a master sommelier and wine expert. Identify this wine from the label and provide COMPREHENSIVE details using your full knowledge of wine, including critic reviews and online rankings.
 
@@ -91,9 +93,13 @@ export async function POST(req: NextRequest) {
   });
 
   const text = message.content[0].type === "text" ? message.content[0].text : "";
+  // Claude sometimes wraps its JSON in markdown fences despite the prompt;
+  // strip them before parsing (same pattern as scan/batch/process and
+  // receipt/parse).
+  const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
 
   try {
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(cleaned);
     return NextResponse.json(parsed);
   } catch {
     return NextResponse.json({ error: "Failed to parse AI response", raw: text }, { status: 500 });

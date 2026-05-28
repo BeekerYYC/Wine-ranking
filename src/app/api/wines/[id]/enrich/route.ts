@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { enrichWine } from "@/lib/enrich";
 import { prisma } from "@/lib/db";
 
+// enrichWine fires parallel Claude calls + a web search with URL validation;
+// the 10s default Vercel timeout aborts these mid-flight ("Load failed" in Safari).
+export const maxDuration = 60;
+
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

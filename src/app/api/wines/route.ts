@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { enrichWine } from "@/lib/enrich";
 
+// POST inlines enrichWine() — needs more than the 10s default.
+export const maxDuration = 60;
+
 export async function GET(req: NextRequest) {
   const search = req.nextUrl.searchParams.get("search") || "";
   const color = req.nextUrl.searchParams.get("color") || "";
