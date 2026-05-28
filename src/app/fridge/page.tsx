@@ -5,6 +5,7 @@ import { useCategory } from "@/lib/CategoryContext";
 import { normalizeColor } from "@/lib/colors";
 import ConsumeModal from "@/components/ConsumeModal";
 import FindLabelsModal from "@/components/FindLabelsModal";
+import EnrichAllModal from "@/components/EnrichAllModal";
 
 interface Wine {
   id: number;
@@ -24,6 +25,9 @@ interface Wine {
   onlineRating?: number | null;
   drinkingWindow?: string | null;
   criticReviews?: string | null;
+  tastingNotes?: string | null;
+  description?: string | null;
+  foodPairings?: string | null;
 }
 
 const COLOR_DOTS: Record<string, string> = {
@@ -71,6 +75,8 @@ export default function FridgePage() {
   const [showSearch, setShowSearch] = useState(false);
   const [missingImageCount, setMissingImageCount] = useState(0);
   const [showFindLabels, setShowFindLabels] = useState(false);
+  const [missingEnrichCount, setMissingEnrichCount] = useState(0);
+  const [showEnrichAll, setShowEnrichAll] = useState(false);
 
   const fetchWines = () => {
     setLoading(true);
@@ -80,6 +86,11 @@ export default function FridgePage() {
         const inCollection = data.filter((w) => w.quantity > 0);
         setWines(inCollection);
         setMissingImageCount(inCollection.filter((w) => !w.imageData && !w.labelImageUrl).length);
+        setMissingEnrichCount(
+          inCollection.filter(
+            (w) => !w.tastingNotes && !w.criticReviews && !w.description && !w.foodPairings && !w.drinkingWindow,
+          ).length,
+        );
       })
       .finally(() => setLoading(false));
   };
@@ -140,6 +151,18 @@ export default function FridgePage() {
           <p className="text-[13px] text-text-tertiary mt-1">Your curated collection ready to enjoy.</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {missingEnrichCount > 0 && (
+            <button
+              onClick={() => setShowEnrichAll(true)}
+              title={`Enrich ${missingEnrichCount} wine${missingEnrichCount !== 1 ? "s" : ""} missing AI data`}
+              className="h-10 px-3 rounded-xl border bg-gold-muted border-gold/30 text-gold hover:bg-gold/20 transition-all flex items-center gap-1.5"
+            >
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+              </svg>
+              <span className="text-[12px] font-semibold tabular-nums">{missingEnrichCount}</span>
+            </button>
+          )}
           {missingImageCount > 0 && (
             <button
               onClick={() => setShowFindLabels(true)}
@@ -311,6 +334,14 @@ export default function FridgePage() {
         <FindLabelsModal
           category={category}
           onClose={() => setShowFindLabels(false)}
+          onComplete={fetchWines}
+        />
+      )}
+
+      {showEnrichAll && (
+        <EnrichAllModal
+          category={category}
+          onClose={() => setShowEnrichAll(false)}
           onComplete={fetchWines}
         />
       )}
