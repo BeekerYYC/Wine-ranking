@@ -46,11 +46,34 @@ export async function GET(req: NextRequest) {
     include: { store: true, list: true },
   });
 
-  return NextResponse.json(wines);
+  // Never inline the base64 photos in a list response — ~175 KB per bottle blows
+  // past the 4.5 MB serverless response limit at ~25 photographed bottles and
+  // takes the entire cellar down with it. Clients load images from
+  // /api/wines/[id]/image via the `hasImage` flag (see src/lib/wineImage.ts).
+  const list = wines.map(({ imageData, ...wine }) => ({
+    ...wine,
+    hasImage: !!imageData,
+  }));
+
+  return NextResponse.json(list);
 }
+
+// Creating a wine also runs AI enrichment, which needs more than the default
+// serverless budget. Without this the request can time out at the gateway and
+// the user sees "Failed to save" for a bottle that was in fact created.
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+
+  const status = body.status || "collection";
+
+  // The cellar only lists bottles with quantity > 0, so a "collection" wine
+  // saved with quantity 0 (or an unparseable value) is created but permanently
+  // invisible — it looks exactly like the save silently failed.
+  const parsedQuantity = Number.parseInt(body.quantity, 10);
+  let quantity = Number.isFinite(parsedQuantity) && parsedQuantity >= 0 ? parsedQuantity : 1;
+  if (status === "collection" && quantity < 1) quantity = 1;
 
   let storeId: number | null = null;
   if (body.storeName) {
@@ -80,8 +103,8 @@ export async function POST(req: NextRequest) {
       drinkingWindow: body.drinkingWindow || null,
       criticReviews: body.criticReviews || null,
       imageData: body.imageData || null,
-      quantity: body.quantity ? parseInt(body.quantity) : 1,
-      status: body.status || "collection",
+      quantity,
+      status,
       occasion: body.occasion || null,
       foodPairings: body.foodPairings || null,
       onlineRating: body.onlineRating ? parseFloat(body.onlineRating) : null,

@@ -22,13 +22,33 @@ export async function POST(
   const batch = await prisma.scanBatch.findUnique({ where: { id: parseInt(batchId) } });
   const category = batch?.category || "wine";
 
-  const results = [];
+  const results: Record<string, unknown>[] = [];
 
   for (const item of items) {
     const scanItem = await prisma.scanItem.findUnique({
       where: { id: item.scanItemId },
     });
-    if (!scanItem || scanItem.batchId !== parseInt(batchId)) continue;
+
+    // Report skips instead of dropping them silently — the review screen used to
+    // show "Added 1 item" for requests where nothing was saved at all.
+    if (!scanItem || scanItem.batchId !== parseInt(batchId)) {
+      results.push({
+        scanItemId: item.scanItemId,
+        action: "skipped",
+        reason: scanItem ? "Item belongs to a different batch" : "Item not found",
+      });
+      continue;
+    }
+
+    if (scanItem.status === "confirmed") {
+      results.push({
+        scanItemId: item.scanItemId,
+        action: "skipped",
+        reason: "Item was already added",
+        wineId: scanItem.wineId,
+      });
+      continue;
+    }
 
     if (item.action === "reject") {
       await prisma.scanItem.update({
@@ -40,7 +60,11 @@ export async function POST(
       const wineName = item.edits?.name || scanItem.name || "Unknown";
       const wineVintage = item.edits?.vintage ?? scanItem.vintage;
       const wineWinery = item.edits?.winery ?? scanItem.winery;
-      const addQty = item.edits?.quantity ?? scanItem.quantity ?? 1;
+      // The cellar only lists bottles with quantity > 0, so anything that lands
+      // at 0 here (blank/zeroed qty field, unparseable edit) would be saved and
+      // then never shown. Always add at least one bottle.
+      const requestedQty = Number(item.edits?.quantity ?? scanItem.quantity ?? 1);
+      const addQty = Number.isFinite(requestedQty) ? Math.max(1, Math.trunc(requestedQty)) : 1;
 
       // Check for existing item with same name + vintage (+ producer if available)
       const existingWhere: Record<string, unknown> = {
@@ -64,7 +88,14 @@ export async function POST(
           data: { status: "confirmed", wineId: wine.id },
         });
 
-        results.push({ scanItemId: item.scanItemId, action: "merged", wineId: wine.id, addedQty: addQty });
+        results.push({
+          scanItemId: item.scanItemId,
+          action: "merged",
+          wineId: wine.id,
+          name: wine.name,
+          addedQty: addQty,
+          quantity: wine.quantity,
+        });
       } else {
         const wine = await prisma.wine.create({
           data: {
@@ -92,7 +123,13 @@ export async function POST(
           data: { status: "confirmed", wineId: wine.id },
         });
 
-        results.push({ scanItemId: item.scanItemId, action: "confirmed", wineId: wine.id });
+        results.push({
+          scanItemId: item.scanItemId,
+          action: "confirmed",
+          wineId: wine.id,
+          name: wine.name,
+          quantity: wine.quantity,
+        });
       }
     }
   }

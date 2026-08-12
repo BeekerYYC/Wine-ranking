@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
+import { wineImageSrc } from "@/lib/wineImage";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from "recharts";
 
 interface Wine {
@@ -15,7 +16,7 @@ interface Wine {
   color?: string | null;
   rating?: number | null;
   onlineRating?: number | null;
-  imageData?: string | null;
+  hasImage?: boolean;
   labelImageUrl?: string | null;
   tastingNotes?: string | null;
   criticReviews?: string | null;
@@ -47,18 +48,20 @@ function getGreeting() {
 }
 
 export default function Home() {
-  const { config } = useCategory();
+  const { category, config } = useCategory();
   const [wines, setWines] = useState<Wine[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => {
-    fetch(`/api/wines?sort=createdAt&order=desc`)
-      .then((r) => r.json())
-      .then((data: Wine[]) => setWines(data.slice(0, 8)));
-    fetch(`/api/stats`)
-      .then((r) => r.json())
-      .then(setStats);
-  }, []);
+    fetch(`/api/wines?category=${category}&sort=createdAt&order=desc`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: Wine[]) => setWines(Array.isArray(data) ? data.slice(0, 8) : []))
+      .catch(() => setWines([]));
+    fetch(`/api/stats?category=${category}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => s && setStats(s))
+      .catch(() => {});
+  }, [category]);
 
   const recentEnriched = wines.filter((w) => w.tastingNotes || w.criticReviews).slice(0, 6);
   const newThisWeek = wines.filter((w) => {
@@ -179,9 +182,9 @@ export default function Home() {
                 className="flex-shrink-0 w-[180px] rounded-2xl overflow-hidden bg-surface-raised border border-border-subtle hover:border-gold/30 transition-all group"
               >
                 <div className="h-[160px] bg-gradient-to-br from-surface-overlay to-surface relative overflow-hidden flex items-center justify-center">
-                  {wine.imageData || wine.labelImageUrl ? (
+                  {wineImageSrc(wine) ? (
                     <img
-                      src={wine.imageData || wine.labelImageUrl || ""}
+                      src={wineImageSrc(wine) || ""}
                       alt={wine.name}
                       className="h-full object-contain"
                     />

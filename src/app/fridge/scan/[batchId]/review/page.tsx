@@ -21,6 +21,9 @@ export default function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [confirmed, setConfirmed] = useState(0);
   const [rejected, setRejected] = useState(0);
+  const [merged, setMerged] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/scan/batch/${batchId}`)
@@ -49,31 +52,67 @@ export default function ReviewPage() {
   }, [currentIndex, items]);
 
   const handleAction = async (action: "confirm" | "reject") => {
-    await fetch(`/api/scan/batch/${batchId}/confirm`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: [{
-          scanItemId: current.id,
-          action,
-          edits: action === "confirm" ? {
-            name: edits.name, winery: edits.winery,
-            vintage: edits.vintage ? parseInt(edits.vintage) : undefined,
-            varietal: edits.varietal, region: edits.region,
-            country: edits.country, color: edits.color,
-            quantity: edits.quantity ? parseInt(edits.quantity) : 1,
-          } : undefined,
-        }],
-      }),
-    });
+    if (saving) return;
+    setSaving(true);
+    setError(null);
 
-    if (action === "confirm") setConfirmed((c) => c + 1);
-    else setRejected((c) => c + 1);
+    try {
+      const res = await fetch(`/api/scan/batch/${batchId}/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: [{
+            scanItemId: current.id,
+            action,
+            edits: action === "confirm" ? {
+              name: edits.name, winery: edits.winery,
+              vintage: edits.vintage ? parseInt(edits.vintage) : undefined,
+              varietal: edits.varietal, region: edits.region,
+              country: edits.country, color: edits.color,
+              quantity: edits.quantity ? parseInt(edits.quantity) : 1,
+            } : undefined,
+          }],
+        }),
+      });
 
-    if (isLast) {
-      setItems([]);
-    } else {
-      setCurrentIndex((i) => i + 1);
+      // Never assume the save worked — this screen used to report "Added 1 item"
+      // even when the request failed outright, so bottles vanished with no error.
+      if (!res.ok) {
+        throw new Error(`The server rejected the save (HTTP ${res.status}). Nothing was added.`);
+      }
+
+      const data = await res.json();
+      const result = data?.results?.[0];
+
+      if (!result) {
+        throw new Error("The server did not save this item. Please try again.");
+      }
+      if (result.action === "skipped") {
+        throw new Error(result.reason || "The server skipped this item.");
+      }
+      if (result.action === "error") {
+        throw new Error(result.error || "The server could not save this item.");
+      }
+
+      if (action === "confirm") {
+        if (result.action === "merged") {
+          setMerged((m) => [...m, `${result.name} (now ${result.quantity} in stock)`]);
+        } else {
+          setConfirmed((c) => c + 1);
+        }
+      } else {
+        setRejected((c) => c + 1);
+      }
+
+      if (isLast) {
+        setItems([]);
+      } else {
+        setCurrentIndex((i) => i + 1);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save this item");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -98,8 +137,19 @@ export default function ReviewPage() {
         </div>
         <h1 className="text-xl font-bold text-text-primary mb-2">Review Complete</h1>
         <p className="text-[13px] text-text-tertiary mb-1">
-          Added <span className="text-gold font-semibold">{confirmed}</span> item{confirmed !== 1 ? "s" : ""} to your {config.fridgeLabel.toLowerCase()}
+          Added <span className="text-gold font-semibold">{confirmed}</span> new item{confirmed !== 1 ? "s" : ""} to your {config.fridgeLabel.toLowerCase()}
         </p>
+        {/* Merges are not new cards — say so, otherwise it reads as a lost bottle. */}
+        {merged.length > 0 && (
+          <div className="bg-surface-raised border border-border-subtle rounded-xl p-3 mt-3 mb-2 text-left">
+            <p className="text-[12px] text-text-secondary mb-1">
+              {merged.length} matched {merged.length !== 1 ? "items" : "an item"} you already had — the bottle count was increased instead of adding a new card:
+            </p>
+            <ul className="text-[11px] text-text-tertiary space-y-0.5">
+              {merged.map((m, i) => <li key={i}>• {m}</li>)}
+            </ul>
+          </div>
+        )}
         {rejected > 0 && <p className="text-[12px] text-text-muted mb-6">{rejected} skipped</p>}
         <div className="flex gap-3 justify-center mt-6">
           <button onClick={() => router.push("/fridge")} className="bg-gold/90 hover:bg-gold text-bg px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-colors">
@@ -177,15 +227,24 @@ export default function ReviewPage() {
         </div>
       </div>
 
+      {error && (
+        <div className="bg-danger-muted border border-danger/15 rounded-xl p-3 mb-3">
+          <p className="text-[13px] text-danger">{error}</p>
+          <p className="text-[11px] text-text-tertiary mt-1">
+            This item has not been added. Tap &ldquo;Add to {config.fridgeLabel}&rdquo; to retry.
+          </p>
+        </div>
+      )}
+
       {/* Action buttons */}
       <div className="flex gap-2">
-        <button onClick={() => handleAction("reject")}
-          className="flex-1 bg-surface-raised hover:bg-surface-overlay border border-border-subtle text-text-muted hover:text-text-secondary py-3 rounded-lg text-[13px] font-medium transition-all">
+        <button onClick={() => handleAction("reject")} disabled={saving}
+          className="flex-1 bg-surface-raised hover:bg-surface-overlay disabled:opacity-40 border border-border-subtle text-text-muted hover:text-text-secondary py-3 rounded-lg text-[13px] font-medium transition-all">
           Skip
         </button>
-        <button onClick={() => handleAction("confirm")}
-          className="flex-[2] bg-gold/90 hover:bg-gold text-bg py-3 rounded-lg text-[13px] font-semibold transition-colors">
-          Add to {config.fridgeLabel}
+        <button onClick={() => handleAction("confirm")} disabled={saving}
+          className="flex-[2] bg-gold/90 hover:bg-gold disabled:opacity-40 text-bg py-3 rounded-lg text-[13px] font-semibold transition-colors">
+          {saving ? "Saving..." : `Add to ${config.fridgeLabel}`}
         </button>
       </div>
     </div>
