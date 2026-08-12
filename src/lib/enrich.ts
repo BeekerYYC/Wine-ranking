@@ -144,6 +144,34 @@ If you cannot find any usable image, return {"candidates": []}. No prose, no mar
   }
 }
 
+/**
+ * Parse the enrichment reply.
+ *
+ * "Return ONLY valid JSON" is a request, not a guarantee: the model wraps the
+ * object in a ```json fence often enough that a bare JSON.parse made enrichment
+ * fail at random. That failure was invisible — enrichWine swallows its own
+ * errors — so bottles simply arrived with no tasting notes and the user had to
+ * hit "enrich" by hand, which succeeded whenever the next reply came back
+ * unfenced. The scan route has always stripped fences; this one never did.
+ */
+function parseEnrichmentJson(raw: string): Record<string, unknown> {
+  const cleaned = raw
+    .replace(/^\s*```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // Last resort: the outermost object anywhere in the reply, in case the model
+    // wrapped it in prose as well.
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start === -1 || end <= start) throw new Error("no JSON object in enrichment reply");
+    return JSON.parse(cleaned.slice(start, end + 1));
+  }
+}
+
 export async function enrichWine(wineId: number): Promise<{ success: boolean; error?: string }> {
   const wine = await prisma.wine.findUnique({ where: { id: wineId } });
   if (!wine) return { success: false, error: "Not found" };
@@ -169,8 +197,10 @@ export async function enrichWine(wineId: number): Promise<{ success: boolean; er
       wine.labelImageUrl ? Promise.resolve(null) : findLabelImageUrl(wine as unknown as Record<string, unknown>),
     ]);
 
-    const text = message.content[0].type === "text" ? message.content[0].text : "";
-    const parsed = JSON.parse(text);
+    // Take the first text block rather than assuming content[0] is one.
+    const textBlock = message.content.find((b) => b.type === "text");
+    const text = textBlock && textBlock.type === "text" ? textBlock.text : "";
+    const parsed = parseEnrichmentJson(text);
 
     const data: Record<string, unknown> = {};
     if (parsed.description) data.description = parsed.description;
@@ -178,7 +208,7 @@ export async function enrichWine(wineId: number): Promise<{ success: boolean; er
     if (parsed.drinkingWindow) data.drinkingWindow = parsed.drinkingWindow;
     if (parsed.criticReviews) data.criticReviews = parsed.criticReviews;
     if (parsed.foodPairings) data.foodPairings = parsed.foodPairings;
-    if (parsed.onlineRating) data.onlineRating = parseFloat(parsed.onlineRating);
+    if (parsed.onlineRating) data.onlineRating = parseFloat(String(parsed.onlineRating));
     if (labelImageUrl) data.labelImageUrl = labelImageUrl;
 
     await prisma.wine.update({ where: { id: wineId }, data });
