@@ -71,6 +71,44 @@ export async function GET(req: NextRequest) {
     };
   });
 
+  // Rows that exist but can never appear in the cellar: the cellar lists only
+  // `status: "collection"` with quantity > 0, so a 0-quantity collection row
+  // looks to the user exactly like a save that silently failed.
+  const hiddenFromCellar = all
+    .filter((w) => w.status === "collection" && w.quantity <= 0)
+    .map((w) => ({ id: w.id, name: w.name, quantity: w.quantity, createdAt: w.createdAt }));
+
+  // Total stored base64 photo weight. This used to be inlined into every cellar
+  // list response, which broke the cellar entirely once it passed the 4.5 MB
+  // serverless response limit; images are now served per-wine instead. Kept
+  // visible here as a reminder of how much this would have been.
+  const cellarRows = all.filter((w) => w.status === "collection" && w.quantity > 0);
+  const storedImageBytes = all.reduce((n, w) => n + (w.imageData?.length || 0), 0);
+
+  // Recent scans, so an item that was analyzed but never confirmed (i.e. "Add to
+  // cellar" did not actually reach the database) is visible.
+  const recentBatches = await prisma.scanBatch.findMany({
+    where: { category },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+    include: { items: { select: { id: true, status: true, name: true, wineId: true } } },
+  });
+
+  const recentScans = recentBatches.map((b) => ({
+    batchId: b.id,
+    status: b.status,
+    createdAt: b.createdAt,
+    totalPhotos: b.totalPhotos,
+    processed: b.processed,
+    items: b.items.map((i) => ({
+      id: i.id,
+      name: i.name,
+      status: i.status,
+      // status "analyzed" == reviewed but never added to the cellar
+      savedAsWineId: i.wineId,
+    })),
+  }));
+
   return NextResponse.json({
     totalRows: all.length,
     totalBottles: all.reduce((n, w) => n + w.quantity, 0),
@@ -78,6 +116,10 @@ export async function GET(req: NextRequest) {
     byColor,
     byStore,
     missingImages,
+    hiddenFromCellar,
+    cellarListRows: cellarRows.length,
+    storedImageMB: Math.round((storedImageBytes / 1024 / 1024) * 100) / 100,
+    recentScans,
     receiptStatus,
   });
 }

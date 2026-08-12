@@ -21,6 +21,12 @@ export default function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [confirmed, setConfirmed] = useState(0);
   const [rejected, setRejected] = useState(0);
+  const [merged, setMerged] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [enrich, setEnrich] = useState<{ done: number; total: number; current: string } | null>(null);
+  const [enrichErrors, setEnrichErrors] = useState<string[]>([]);
+  const [savedWines, setSavedWines] = useState<{ wineId: number; name: string }[]>([]);
 
   useEffect(() => {
     fetch(`/api/scan/batch/${batchId}`)
@@ -48,32 +54,100 @@ export default function ReviewPage() {
     if (current) resetEdits(current);
   }, [currentIndex, items]);
 
+  /**
+   * Fill in tasting notes, critic reviews, drinking window and a label image for
+   * the bottles just added. The manual-add and receipt paths already do this; the
+   * scan path did not, which left scanned bottles permanently missing that detail
+   * — and invisible in any list that keys off enrichment.
+   * The bottles are saved before this runs, so failures here are cosmetic.
+   */
+  const runEnrichment = async (saved: { wineId: number; name: string }[]) => {
+    if (saved.length === 0) return;
+    const errs: string[] = [];
+    for (let i = 0; i < saved.length; i++) {
+      setEnrich({ done: i, total: saved.length, current: saved[i].name });
+      try {
+        const r = await fetch(`/api/wines/${saved[i].wineId}/enrich`, { method: "POST" });
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({}));
+          errs.push(`${saved[i].name}: ${d.error || "could not fetch details"}`);
+        }
+      } catch (e) {
+        errs.push(`${saved[i].name}: ${e instanceof Error ? e.message : "could not fetch details"}`);
+      }
+    }
+    setEnrich({ done: saved.length, total: saved.length, current: "Done" });
+    setEnrichErrors(errs);
+  };
+
   const handleAction = async (action: "confirm" | "reject") => {
-    await fetch(`/api/scan/batch/${batchId}/confirm`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: [{
-          scanItemId: current.id,
-          action,
-          edits: action === "confirm" ? {
-            name: edits.name, winery: edits.winery,
-            vintage: edits.vintage ? parseInt(edits.vintage) : undefined,
-            varietal: edits.varietal, region: edits.region,
-            country: edits.country, color: edits.color,
-            quantity: edits.quantity ? parseInt(edits.quantity) : 1,
-          } : undefined,
-        }],
-      }),
-    });
+    if (saving) return;
+    setSaving(true);
+    setError(null);
 
-    if (action === "confirm") setConfirmed((c) => c + 1);
-    else setRejected((c) => c + 1);
+    try {
+      const res = await fetch(`/api/scan/batch/${batchId}/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: [{
+            scanItemId: current.id,
+            action,
+            edits: action === "confirm" ? {
+              name: edits.name, winery: edits.winery,
+              vintage: edits.vintage ? parseInt(edits.vintage) : undefined,
+              varietal: edits.varietal, region: edits.region,
+              country: edits.country, color: edits.color,
+              quantity: edits.quantity ? parseInt(edits.quantity) : 1,
+            } : undefined,
+          }],
+        }),
+      });
 
-    if (isLast) {
-      setItems([]);
-    } else {
-      setCurrentIndex((i) => i + 1);
+      // Never assume the save worked — this screen used to report "Added 1 item"
+      // even when the request failed outright, so bottles vanished with no error.
+      if (!res.ok) {
+        throw new Error(`The server rejected the save (HTTP ${res.status}). Nothing was added.`);
+      }
+
+      const data = await res.json();
+      const result = data?.results?.[0];
+
+      if (!result) {
+        throw new Error("The server did not save this item. Please try again.");
+      }
+      if (result.action === "skipped") {
+        throw new Error(result.reason || "The server skipped this item.");
+      }
+      if (result.action === "error") {
+        throw new Error(result.error || "The server could not save this item.");
+      }
+
+      // Only newly created bottles need enrichment — a merge went into a bottle
+      // that was already in the cellar.
+      let saved = savedWines;
+      if (action === "confirm") {
+        if (result.action === "merged") {
+          setMerged((m) => [...m, `${result.name} (now ${result.quantity} in stock)`]);
+        } else {
+          setConfirmed((c) => c + 1);
+          saved = [...savedWines, { wineId: result.wineId, name: result.name }];
+          setSavedWines(saved);
+        }
+      } else {
+        setRejected((c) => c + 1);
+      }
+
+      if (isLast) {
+        setItems([]);
+        void runEnrichment(saved);
+      } else {
+        setCurrentIndex((i) => i + 1);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save this item");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -98,9 +172,47 @@ export default function ReviewPage() {
         </div>
         <h1 className="text-xl font-bold text-text-primary mb-2">Review Complete</h1>
         <p className="text-[13px] text-text-tertiary mb-1">
-          Added <span className="text-gold font-semibold">{confirmed}</span> item{confirmed !== 1 ? "s" : ""} to your {config.fridgeLabel.toLowerCase()}
+          Added <span className="text-gold font-semibold">{confirmed}</span> new item{confirmed !== 1 ? "s" : ""} to your {config.fridgeLabel.toLowerCase()}
         </p>
+        {/* Merges are not new cards — say so, otherwise it reads as a lost bottle. */}
+        {merged.length > 0 && (
+          <div className="bg-surface-raised border border-border-subtle rounded-xl p-3 mt-3 mb-2 text-left">
+            <p className="text-[12px] text-text-secondary mb-1">
+              {merged.length} matched {merged.length !== 1 ? "items" : "an item"} you already had — the bottle count was increased instead of adding a new card:
+            </p>
+            <ul className="text-[11px] text-text-tertiary space-y-0.5">
+              {merged.map((m, i) => <li key={i}>• {m}</li>)}
+            </ul>
+          </div>
+        )}
         {rejected > 0 && <p className="text-[12px] text-text-muted mb-6">{rejected} skipped</p>}
+
+        {/* Enrichment runs after the save, so the bottles are already in the
+            cellar whatever happens here. */}
+        {enrich && enrich.done < enrich.total && (
+          <div className="bg-surface-raised border border-border-subtle rounded-xl p-3 mt-4 flex items-center gap-3 text-left">
+            <div className="animate-spin w-4 h-4 border-2 border-gold border-t-transparent rounded-full flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[12px] text-text-secondary truncate">
+                Looking up tasting notes ({enrich.done + 1} of {enrich.total}): {enrich.current}
+              </p>
+              <p className="text-[11px] text-text-muted">
+                Already saved to your {config.fridgeLabel.toLowerCase()} — you can leave this page.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {enrichErrors.length > 0 && (
+          <div className="bg-surface-raised border border-border-subtle rounded-xl p-3 mt-4 text-left">
+            <p className="text-[12px] text-text-secondary mb-1">
+              Saved, but could not fetch extra details for {enrichErrors.length} item{enrichErrors.length !== 1 ? "s" : ""}:
+            </p>
+            <ul className="text-[11px] text-text-tertiary space-y-0.5">
+              {enrichErrors.map((e, i) => <li key={i}>• {e}</li>)}
+            </ul>
+          </div>
+        )}
         <div className="flex gap-3 justify-center mt-6">
           <button onClick={() => router.push("/fridge")} className="bg-gold/90 hover:bg-gold text-bg px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-colors">
             View {config.fridgeLabel}
@@ -177,15 +289,24 @@ export default function ReviewPage() {
         </div>
       </div>
 
+      {error && (
+        <div className="bg-danger-muted border border-danger/15 rounded-xl p-3 mb-3">
+          <p className="text-[13px] text-danger">{error}</p>
+          <p className="text-[11px] text-text-tertiary mt-1">
+            This item has not been added. Tap &ldquo;Add to {config.fridgeLabel}&rdquo; to retry.
+          </p>
+        </div>
+      )}
+
       {/* Action buttons */}
       <div className="flex gap-2">
-        <button onClick={() => handleAction("reject")}
-          className="flex-1 bg-surface-raised hover:bg-surface-overlay border border-border-subtle text-text-muted hover:text-text-secondary py-3 rounded-lg text-[13px] font-medium transition-all">
+        <button onClick={() => handleAction("reject")} disabled={saving}
+          className="flex-1 bg-surface-raised hover:bg-surface-overlay disabled:opacity-40 border border-border-subtle text-text-muted hover:text-text-secondary py-3 rounded-lg text-[13px] font-medium transition-all">
           Skip
         </button>
-        <button onClick={() => handleAction("confirm")}
-          className="flex-[2] bg-gold/90 hover:bg-gold text-bg py-3 rounded-lg text-[13px] font-semibold transition-colors">
-          Add to {config.fridgeLabel}
+        <button onClick={() => handleAction("confirm")} disabled={saving}
+          className="flex-[2] bg-gold/90 hover:bg-gold disabled:opacity-40 text-bg py-3 rounded-lg text-[13px] font-semibold transition-colors">
+          {saving ? "Saving..." : `Add to ${config.fridgeLabel}`}
         </button>
       </div>
     </div>

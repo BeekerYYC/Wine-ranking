@@ -2,8 +2,13 @@
 
 import { useState } from "react";
 import WineBottlePlaceholder from "./WineBottlePlaceholder";
+import { winePhotoSrc } from "@/lib/wineImage";
 
 interface Props {
+  /** Needed to load the photo from /api/wines/[id]/image when `hasImage` is set. */
+  wineId?: number;
+  /** List endpoints send this flag instead of the base64 blob. */
+  hasImage?: boolean | null;
   imageData?: string | null;
   labelImageUrl?: string | null;
   alt: string;
@@ -20,6 +25,8 @@ interface Props {
  * placeholder instead of leaving the broken-image icon visible.
  */
 export default function WineImage({
+  wineId,
+  hasImage,
   imageData,
   labelImageUrl,
   alt,
@@ -30,7 +37,10 @@ export default function WineImage({
 }: Props) {
   const [labelFailed, setLabelFailed] = useState(false);
 
-  const src = imageData || (labelImageUrl && !labelFailed ? labelImageUrl : null);
+  // Either an inlined base64 photo (single-wine responses) or this wine's own
+  // photo endpoint (list responses).
+  const photo = winePhotoSrc({ id: wineId, hasImage, imageData });
+  const src = photo || (labelImageUrl && !labelFailed ? labelImageUrl : null);
 
   if (!src) {
     if (fallbackEmoji) {
@@ -44,9 +54,9 @@ export default function WineImage({
       src={src}
       alt={alt}
       className={className}
-      // Only the remote URL can fail — base64 imageData always loads.
+      // Only the remote URL can fail — our own photo endpoint is first-party.
       onError={() => {
-        if (!imageData && labelImageUrl) setLabelFailed(true);
+        if (!photo && labelImageUrl) setLabelFailed(true);
       }}
     />
   );

@@ -22,6 +22,7 @@ interface Wine {
   confidence?: number | null;
   consumedAt?: string | null;
   imageData?: string | null;
+  hasImage?: boolean;
   labelImageUrl?: string | null;
 }
 
@@ -45,6 +46,8 @@ export default function WineCard({
         {/* Image: prefer user photo, fall back to AI-found label, then placeholder */}
         <div className="flex-shrink-0 w-12 h-16 flex items-center justify-center">
           <WineImage
+            wineId={wine.id}
+            hasImage={wine.hasImage}
             imageData={wine.imageData}
             labelImageUrl={wine.labelImageUrl}
             alt={wine.name}
