@@ -35,28 +35,42 @@ export async function PUT(
     }
   }
 
+  // Only ever touch fields the caller actually sent.
+  //
+  // These used to be written as `body.x || null`, which meant any field absent
+  // from the request was overwritten with null — and the "remove undefined
+  // values" pass below could not catch it, because null is not undefined. The
+  // quantity stepper and status dropdown on a wine's page send only
+  // `{quantity}` / `{status}`, so a single tap on either wiped the winery,
+  // vintage, varietal, region, country, colour, price, rating, notes,
+  // description AND the user's photo off that wine.
+  const has = (key: string) => body[key] !== undefined;
+  const text = (key: string) => (has(key) ? body[key] || null : undefined);
+  const int = (key: string) => (has(key) ? (body[key] ? parseInt(body[key]) : null) : undefined);
+  const float = (key: string) => (has(key) ? (body[key] ? parseFloat(body[key]) : null) : undefined);
+
   const data: Record<string, unknown> = {
-    name: body.name,
-    winery: body.winery || null,
-    vintage: body.vintage ? parseInt(body.vintage) : null,
-    varietal: body.varietal || null,
-    region: body.region || null,
-    country: body.country || null,
-    color: body.color || null,
-    price: body.price ? parseFloat(body.price) : null,
-    rating: body.rating ? parseInt(body.rating) : null,
-    notes: body.notes || null,
-    description: body.description || null,
-    tastingNotes: body.tastingNotes !== undefined ? (body.tastingNotes || null) : undefined,
-    drinkingWindow: body.drinkingWindow !== undefined ? (body.drinkingWindow || null) : undefined,
-    criticReviews: body.criticReviews !== undefined ? (body.criticReviews || null) : undefined,
-    imageData: body.imageData || null,
+    name: has("name") ? body.name : undefined,
+    winery: text("winery"),
+    vintage: int("vintage"),
+    varietal: text("varietal"),
+    region: text("region"),
+    country: text("country"),
+    color: text("color"),
+    price: float("price"),
+    rating: int("rating"),
+    notes: text("notes"),
+    description: text("description"),
+    tastingNotes: text("tastingNotes"),
+    drinkingWindow: text("drinkingWindow"),
+    criticReviews: text("criticReviews"),
+    imageData: text("imageData"),
     quantity: body.quantity != null ? parseInt(body.quantity) : undefined,
     status: body.status || undefined,
-    occasion: body.occasion !== undefined ? body.occasion : undefined,
-    foodPairings: body.foodPairings !== undefined ? body.foodPairings : undefined,
-    onlineRating: body.onlineRating !== undefined ? (body.onlineRating ? parseFloat(body.onlineRating) : null) : undefined,
-    listId: body.listId !== undefined ? (body.listId ? parseInt(body.listId) : null) : undefined,
+    occasion: has("occasion") ? body.occasion : undefined,
+    foodPairings: has("foodPairings") ? body.foodPairings : undefined,
+    onlineRating: float("onlineRating"),
+    listId: int("listId"),
   };
 
   if (storeId !== undefined) data.storeId = storeId;
