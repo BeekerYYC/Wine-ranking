@@ -16,7 +16,7 @@ interface Wine {
   color?: string | null;
   rating?: number | null;
   onlineRating?: number | null;
-  imageData?: string | null;
+  hasImage?: boolean;
   labelImageUrl?: string | null;
   tastingNotes?: string | null;
   criticReviews?: string | null;
@@ -48,20 +48,27 @@ function getGreeting() {
 }
 
 export default function Home() {
-  const { config } = useCategory();
+  const { category, config } = useCategory();
   const [wines, setWines] = useState<Wine[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => {
-    fetch(`/api/wines?sort=createdAt&order=desc`)
-      .then((r) => r.json())
-      .then((data: Wine[]) => setWines(data));
-    fetch(`/api/stats`)
-      .then((r) => r.json())
-      .then(setStats);
-  }, []);
+    fetch(`/api/wines?category=${category}&sort=createdAt&order=desc`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: Wine[]) => setWines(Array.isArray(data) ? data : []))
+      .catch(() => setWines([]));
+    fetch(`/api/stats?category=${category}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => s && setStats(s))
+      .catch(() => {});
+  }, [category]);
 
-  const recentEnriched = wines.filter((w) => w.tastingNotes || w.criticReviews).slice(0, 6);
+  // Every recently added bottle belongs here. This list used to be filtered to
+  // wines with tastingNotes/criticReviews, which only the manual-add and receipt
+  // paths populate — so a bottle added by scanning could never appear, and the
+  // section vanished entirely for a scan-only collection. That made a saved
+  // bottle look lost in the one place you would go to confirm it.
+  const recentlyAdded = wines.slice(0, 6);
   const newThisWeek = wines.filter((w) => {
     const d = new Date(w.createdAt).getTime();
     return Date.now() - d < 7 * 24 * 60 * 60 * 1000;
@@ -160,11 +167,11 @@ export default function Home() {
         </a>
       </div>
 
-      {/* AI Recently Added */}
-      {recentEnriched.length > 0 && (
+      {/* Recently Added */}
+      {recentlyAdded.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-serif text-[20px] font-semibold">AI Recently Added</h2>
+            <h2 className="font-serif text-[20px] font-semibold">Recently Added</h2>
             <a href="/fridge" className="text-[12px] text-text-tertiary hover:text-gold transition-colors flex items-center gap-1">
               See all
               <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -173,7 +180,7 @@ export default function Home() {
             </a>
           </div>
           <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1 -mx-4 px-4">
-            {recentEnriched.map((wine) => (
+            {recentlyAdded.map((wine) => (
               <a
                 key={wine.id}
                 href={`/wine/${wine.id}`}
@@ -181,7 +188,8 @@ export default function Home() {
               >
                 <div className="h-[160px] bg-gradient-to-br from-surface-overlay to-surface relative overflow-hidden flex items-center justify-center">
                   <WineImage
-                    imageData={wine.imageData}
+                    wineId={wine.id}
+                    hasImage={wine.hasImage}
                     labelImageUrl={wine.labelImageUrl}
                     alt={wine.name}
                     color={wine.color}
@@ -196,10 +204,12 @@ export default function Home() {
                   <p className="text-[11px] text-text-tertiary mt-1">
                     {[wine.region, wine.country].filter(Boolean).join(", ")} {wine.vintage && `• ${wine.vintage}`}
                   </p>
-                  <div className="mt-2 inline-flex items-center gap-1 text-[10px] text-cream">
-                    <span>✨</span>
-                    <span className="uppercase tracking-widest font-semibold">AI Enriched</span>
-                  </div>
+                  {(wine.tastingNotes || wine.criticReviews) && (
+                    <div className="mt-2 inline-flex items-center gap-1 text-[10px] text-cream">
+                      <span>✨</span>
+                      <span className="uppercase tracking-widest font-semibold">AI Enriched</span>
+                    </div>
+                  )}
                 </div>
               </a>
             ))}

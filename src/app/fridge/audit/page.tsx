@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCategory } from "@/lib/CategoryContext";
+import { resizePhoto } from "@/lib/photo";
 
 type Phase = "input" | "analyzing" | "review" | "applying" | "done";
 
@@ -35,34 +36,6 @@ interface DiffResponse {
   newInPhotos: (DetectedBottle & { candidates: Candidate[] })[];
 }
 
-function resizeImage(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") return;
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        // 1024 max + 0.78 quality keeps each photo well under the 4.5MB
-        // Vercel request body limit when sending one per request.
-        const maxSize = 1024;
-        let { width, height } = img;
-        if (width > maxSize || height > maxSize) {
-          const ratio = Math.min(maxSize / width, maxSize / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        canvas.width = width;
-        canvas.height = height;
-        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.78));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
 export default function CellarAuditPage() {
   const router = useRouter();
   const { category, config } = useCategory();
@@ -92,12 +65,20 @@ export default function CellarAuditPage() {
     // hold ~50MB. Doing 24 of them in parallel will OOM mobile Safari and
     // silently reload the tab.
     const resized: string[] = [];
+    const failures: string[] = [];
     for (let i = 0; i < files.length; i++) {
-      const r = await resizeImage(files[i]);
-      resized.push(r);
+      try {
+        // 0.78 quality keeps each photo well under the request body limit.
+        resized.push(await resizePhoto(files[i], 1024, 0.78));
+      } catch (err) {
+        failures.push(err instanceof Error ? err.message : "could not be processed");
+      }
       setResizing({ done: i + 1, total: files.length });
     }
-    setPhotos((prev) => [...prev, ...resized]);
+    if (resized.length > 0) setPhotos((prev) => [...prev, ...resized]);
+    // A photo that cannot be resized never reaches the server — say so rather
+    // than leaving the progress counter stuck.
+    if (failures.length > 0) setError(`Could not use ${failures.join("; ")}`);
     setResizing({ done: 0, total: 0 });
   };
 

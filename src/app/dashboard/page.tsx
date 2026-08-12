@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
+import { wineImageSrc } from "@/lib/wineImage";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -18,7 +19,7 @@ interface Activity {
   color: string | null;
   rating: number | null;
   onlineRating: number | null;
-  imageData: string | null;
+  hasImage: boolean;
   labelImageUrl: string | null;
   region: string | null;
   country: string | null;
@@ -133,16 +134,16 @@ function formatRelativeTime(date: string): string {
 }
 
 export default function Dashboard() {
-  const { config } = useCategory();
+  const { category, config } = useCategory();
   const [stats, setStats] = useState<Stats | null>(null);
   const [period, setPeriod] = useState<"month" | "all">("month");
 
   useEffect(() => {
     setStats(null);
     fetch("/api/wines/fix-consumed", { method: "POST" }).then(() => {
-      fetch(`/api/stats`).then((r) => r.json()).then(setStats);
+      fetch(`/api/stats?category=${category}`).then((r) => r.json()).then(setStats);
     });
-  }, []);
+  }, [category]);
 
   if (!stats) return (
     <div className="space-y-4 animate-pulse">
@@ -358,8 +359,8 @@ export default function Dashboard() {
                 className="flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-surface-overlay transition-colors"
               >
                 <div className="w-10 h-12 flex-shrink-0 flex items-center justify-center bg-surface-overlay rounded-lg">
-                  {act.imageData || act.labelImageUrl ? (
-                    <img src={act.imageData || act.labelImageUrl || ""} alt="" className="h-full object-contain" />
+                  {wineImageSrc({ id: act.wineId, hasImage: act.hasImage, labelImageUrl: act.labelImageUrl }) ? (
+                    <img src={wineImageSrc({ id: act.wineId, hasImage: act.hasImage, labelImageUrl: act.labelImageUrl }) || ""} alt="" className="h-full object-contain" />
                   ) : (
                     <span className="text-lg opacity-40">🍷</span>
                   )}

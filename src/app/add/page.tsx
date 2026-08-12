@@ -109,7 +109,7 @@ export default function AddWine() {
       </div>
 
       {!imageData ? (
-        <CameraCapture onCapture={handleCapture} />
+        <CameraCapture onCapture={handleCapture} onError={setError} />
       ) : (
         <div className="relative mb-5 group">
           <img src={imageData} alt="Label" className="w-full max-h-52 object-contain rounded-xl border border-border-subtle" />

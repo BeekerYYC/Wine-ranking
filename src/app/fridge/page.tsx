@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
 import { normalizeColor } from "@/lib/colors";
+import { winePhotoSrc, wineHasNoImage } from "@/lib/wineImage";
 import ConsumeModal from "@/components/ConsumeModal";
 import FindLabelsModal from "@/components/FindLabelsModal";
 import EnrichAllModal from "@/components/EnrichAllModal";
@@ -20,7 +21,7 @@ interface Wine {
   rating?: number | null;
   quantity: number;
   status?: string;
-  imageData?: string | null;
+  hasImage?: boolean;
   labelImageUrl?: string | null;
   onlineRating?: number | null;
   drinkingWindow?: string | null;
@@ -75,27 +76,40 @@ export default function FridgePage() {
   const [showSearch, setShowSearch] = useState(false);
   const [missingImageCount, setMissingImageCount] = useState(0);
   const [showFindLabels, setShowFindLabels] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [missingEnrichCount, setMissingEnrichCount] = useState(0);
   const [showEnrichAll, setShowEnrichAll] = useState(false);
 
   const fetchWines = () => {
     setLoading(true);
-    fetch(`/api/wines?status=collection&sort=${sort}&order=${sort === "name" ? "asc" : "desc"}`)
-      .then((r) => r.json())
-      .then((data: Wine[]) => {
+    setError(null);
+    fetch(`/api/wines?category=${category}&status=collection&sort=${sort}&order=${sort === "name" ? "asc" : "desc"}`)
+      .then(async (r) => {
+        // Surface failures instead of rendering an empty cellar: a failed load
+        // used to be indistinguishable from "you own no wine".
+        if (!r.ok) throw new Error(`Could not load your ${config.fridgeLabel.toLowerCase()} (HTTP ${r.status})`);
+        const data = await r.json();
+        if (!Array.isArray(data)) throw new Error("Unexpected response from the wine list API");
+        return data as Wine[];
+      })
+      .then((data) => {
         const inCollection = data.filter((w) => w.quantity > 0);
         setWines(inCollection);
-        setMissingImageCount(inCollection.filter((w) => !w.imageData && !w.labelImageUrl).length);
+        setMissingImageCount(inCollection.filter(wineHasNoImage).length);
         setMissingEnrichCount(
           inCollection.filter(
             (w) => !w.tastingNotes && !w.criticReviews && !w.description && !w.foodPairings && !w.drinkingWindow,
           ).length,
         );
       })
+      .catch((e: unknown) => {
+        setWines([]);
+        setError(e instanceof Error ? e.message : "Could not load your collection");
+      })
       .finally(() => setLoading(false));
   };
 
-  useEffect(fetchWines, [sort]);
+  useEffect(fetchWines, [sort, category]);
 
   const filtered = useMemo(() => {
     return wines.filter((w) => {
@@ -280,8 +294,24 @@ export default function FridgePage() {
         </div>
       )}
 
+      {/* Load failure — distinct from an empty collection */}
+      {!loading && error && (
+        <div className="bg-danger-muted border border-danger/15 rounded-xl p-4">
+          <p className="text-[13px] text-danger font-medium">{error}</p>
+          <p className="text-[12px] text-text-tertiary mt-1">
+            Your bottles are still saved — this is a loading problem, not a lost collection.
+          </p>
+          <button
+            onClick={fetchWines}
+            className="mt-3 bg-surface-raised hover:bg-surface-overlay border border-border-subtle text-text-secondary px-4 py-2 rounded-lg text-[12px] font-medium transition-all"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Empty state */}
-      {!loading && filtered.length === 0 && (
+      {!loading && !error && filtered.length === 0 && (
         <div className="text-center py-16">
           <div className="w-16 h-16 rounded-2xl bg-gold-muted flex items-center justify-center mx-auto mb-4 text-3xl">
             {config.icon}
@@ -377,7 +407,8 @@ function PremiumWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => voi
   const score = extractTopScore(wine.criticReviews) || (wine.onlineRating ? { score: Math.round(wine.onlineRating), source: "AI" } : null);
   const dotColor = wine.color ? COLOR_DOTS[wine.color] : null;
   const [labelFailed, setLabelFailed] = useState(false);
-  const src = wine.imageData || (wine.labelImageUrl && !labelFailed ? wine.labelImageUrl : null);
+  const photo = winePhotoSrc(wine);
+  const src = photo || (wine.labelImageUrl && !labelFailed ? wine.labelImageUrl : null);
 
   return (
     <div className="relative bg-surface-raised border border-border-subtle hover:border-gold/30 rounded-2xl overflow-hidden transition-all group">
@@ -389,7 +420,7 @@ function PremiumWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => voi
               src={src}
               alt={wine.name}
               className="h-full object-contain drop-shadow-lg"
-              onError={() => { if (!wine.imageData) setLabelFailed(true); }}
+              onError={() => { if (!photo) setLabelFailed(true); }}
             />
           ) : (
             <BottleSilhouette color={dotColor} />
@@ -477,13 +508,14 @@ function PremiumWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => voi
 function ListWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => void }) {
   const score = extractTopScore(wine.criticReviews) || (wine.onlineRating ? { score: Math.round(wine.onlineRating), source: "AI" } : null);
   const [labelFailed, setLabelFailed] = useState(false);
-  const src = wine.imageData || (wine.labelImageUrl && !labelFailed ? wine.labelImageUrl : null);
+  const photo = winePhotoSrc(wine);
+  const src = photo || (wine.labelImageUrl && !labelFailed ? wine.labelImageUrl : null);
   return (
     <div className="bg-surface-raised border border-border-subtle hover:border-gold/30 rounded-2xl transition-all group flex">
       <a href={`/wine/${wine.id}`} className="flex-1 flex gap-3 p-3 min-w-0">
         <div className="w-14 h-20 flex-shrink-0 flex items-center justify-center">
           {src ? (
-            <img src={src} alt={wine.name} className="h-full object-contain" onError={() => { if (!wine.imageData) setLabelFailed(true); }} />
+            <img src={src} alt={wine.name} className="h-full object-contain" onError={() => { if (!photo) setLabelFailed(true); }} />
           ) : (
             <BottleSilhouette color={wine.color ? COLOR_DOTS[wine.color] : null} small />
           )}

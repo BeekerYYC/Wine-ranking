@@ -160,7 +160,9 @@ export async function GET(req: NextRequest) {
     color: string | null;
     rating: number | null;
     onlineRating: number | null;
-    imageData: string | null;
+    // Flag only — inlining base64 photos here made the stats payload grow by
+    // ~175 KB per bottle. Images come from /api/wines/[id]/image.
+    hasImage: boolean;
     labelImageUrl: string | null;
     region: string | null;
     country: string | null;
@@ -180,7 +182,7 @@ export async function GET(req: NextRequest) {
       color: w.color,
       rating: log.rating ?? w.rating,
       onlineRating: w.onlineRating,
-      imageData: w.imageData,
+      hasImage: !!w.imageData,
       labelImageUrl: w.labelImageUrl,
       region: w.region,
       country: w.country,
@@ -198,7 +200,7 @@ export async function GET(req: NextRequest) {
     color: w.color,
     rating: w.rating,
     onlineRating: w.onlineRating,
-    imageData: w.imageData,
+    hasImage: !!w.imageData,
     labelImageUrl: w.labelImageUrl,
     region: w.region,
     country: w.country,
@@ -219,7 +221,7 @@ export async function GET(req: NextRequest) {
     priceRating, monthlyAdditions, ratingDist, topWines, bestValue,
     uniqueVarietals, uniqueRegions, uniqueCountries,
     addedThisWeek, addedThisMonth, consumedThisMonth,
-    wineOfDay: wineOfDay ? { id: wineOfDay.id, name: wineOfDay.name, winery: wineOfDay.winery, rating: wineOfDay.rating, imageData: wineOfDay.imageData, labelImageUrl: wineOfDay.labelImageUrl, color: wineOfDay.color, vintage: wineOfDay.vintage } : null,
+    wineOfDay: wineOfDay ? { id: wineOfDay.id, name: wineOfDay.name, winery: wineOfDay.winery, rating: wineOfDay.rating, hasImage: !!wineOfDay.imageData, labelImageUrl: wineOfDay.labelImageUrl, color: wineOfDay.color, vintage: wineOfDay.vintage } : null,
     onThisDay: onThisDay.map((w) => ({ id: w.id, name: w.name, winery: w.winery, createdAt: w.createdAt, rating: w.rating })),
     recentActivity,
   });

@@ -2,41 +2,29 @@
 
 import { useRef } from "react";
 import { useCategory } from "@/lib/CategoryContext";
+import { resizePhoto } from "@/lib/photo";
 
 export default function CameraCapture({
   onCapture,
+  onError,
 }: {
   onCapture: (dataUrl: string) => void;
+  /** Called when the photo cannot be read or resized, so the page can say so. */
+  onError?: (message: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { config } = useCategory();
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          const maxSize = 1024;
-          let { width, height } = img;
-          if (width > maxSize || height > maxSize) {
-            const ratio = Math.min(maxSize / width, maxSize / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-          }
-          canvas.width = width;
-          canvas.height = height;
-          canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
-          onCapture(canvas.toDataURL("image/jpeg", 0.85));
-        };
-        img.src = reader.result;
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      onCapture(await resizePhoto(file));
+    } catch (err) {
+      // Previously this failed silently: nothing happened after picking a photo.
+      onError?.(`Could not use ${err instanceof Error ? err.message : "that photo"}`);
+    }
   };
 
   return (
