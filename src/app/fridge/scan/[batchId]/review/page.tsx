@@ -24,6 +24,9 @@ export default function ReviewPage() {
   const [merged, setMerged] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [enrich, setEnrich] = useState<{ done: number; total: number; current: string } | null>(null);
+  const [enrichErrors, setEnrichErrors] = useState<string[]>([]);
+  const [savedWines, setSavedWines] = useState<{ wineId: number; name: string }[]>([]);
 
   useEffect(() => {
     fetch(`/api/scan/batch/${batchId}`)
@@ -50,6 +53,31 @@ export default function ReviewPage() {
   useEffect(() => {
     if (current) resetEdits(current);
   }, [currentIndex, items]);
+
+  /**
+   * Fill in tasting notes, critic reviews, drinking window and a label image for
+   * the bottles just added. The manual-add and receipt paths already do this; the
+   * scan path did not, which left scanned bottles permanently missing that detail.
+   * The bottles are saved before this runs, so failures here are cosmetic.
+   */
+  const runEnrichment = async (saved: { wineId: number; name: string }[]) => {
+    if (saved.length === 0) return;
+    const errs: string[] = [];
+    for (let i = 0; i < saved.length; i++) {
+      setEnrich({ done: i, total: saved.length, current: saved[i].name });
+      try {
+        const r = await fetch(`/api/wines/${saved[i].wineId}/enrich`, { method: "POST" });
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({}));
+          errs.push(`${saved[i].name}: ${d.error || "could not fetch details"}`);
+        }
+      } catch (e) {
+        errs.push(`${saved[i].name}: ${e instanceof Error ? e.message : "could not fetch details"}`);
+      }
+    }
+    setEnrich({ done: saved.length, total: saved.length, current: "Done" });
+    setEnrichErrors(errs);
+  };
 
   const handleAction = async (action: "confirm" | "reject") => {
     if (saving) return;
@@ -94,11 +122,16 @@ export default function ReviewPage() {
         throw new Error(result.error || "The server could not save this item.");
       }
 
+      // Only newly created bottles need enrichment — a merge went into a bottle
+      // that was already in the cellar.
+      let saved = savedWines;
       if (action === "confirm") {
         if (result.action === "merged") {
           setMerged((m) => [...m, `${result.name} (now ${result.quantity} in stock)`]);
         } else {
           setConfirmed((c) => c + 1);
+          saved = [...savedWines, { wineId: result.wineId, name: result.name }];
+          setSavedWines(saved);
         }
       } else {
         setRejected((c) => c + 1);
@@ -106,6 +139,7 @@ export default function ReviewPage() {
 
       if (isLast) {
         setItems([]);
+        void runEnrichment(saved);
       } else {
         setCurrentIndex((i) => i + 1);
       }
@@ -151,6 +185,34 @@ export default function ReviewPage() {
           </div>
         )}
         {rejected > 0 && <p className="text-[12px] text-text-muted mb-6">{rejected} skipped</p>}
+
+        {/* Enrichment runs after the save, so the bottles are already in the
+            cellar whatever happens here. */}
+        {enrich && enrich.done < enrich.total && (
+          <div className="bg-surface-raised border border-border-subtle rounded-xl p-3 mt-4 flex items-center gap-3 text-left">
+            <div className="animate-spin w-4 h-4 border-2 border-gold border-t-transparent rounded-full flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[12px] text-text-secondary truncate">
+                Looking up tasting notes ({enrich.done + 1} of {enrich.total}): {enrich.current}
+              </p>
+              <p className="text-[11px] text-text-muted">
+                Already saved to your {config.fridgeLabel.toLowerCase()} — you can leave this page.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {enrichErrors.length > 0 && (
+          <div className="bg-surface-raised border border-border-subtle rounded-xl p-3 mt-4 text-left">
+            <p className="text-[12px] text-text-secondary mb-1">
+              Saved, but could not fetch extra details for {enrichErrors.length} item{enrichErrors.length !== 1 ? "s" : ""}:
+            </p>
+            <ul className="text-[11px] text-text-tertiary space-y-0.5">
+              {enrichErrors.map((e, i) => <li key={i}>• {e}</li>)}
+            </ul>
+          </div>
+        )}
+
         <div className="flex gap-3 justify-center mt-6">
           <button onClick={() => router.push("/fridge")} className="bg-gold/90 hover:bg-gold text-bg px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-colors">
             View {config.fridgeLabel}
