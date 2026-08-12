@@ -2,32 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
-
-function resizeImage(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") return;
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const maxSize = 1024;
-        let { width, height } = img;
-        if (width > maxSize || height > maxSize) {
-          const ratio = Math.min(maxSize / width, maxSize / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        canvas.width = width;
-        canvas.height = height;
-        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.85));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
+import { resizePhoto } from "@/lib/photo";
 
 export default function BulkPhotoUploader({
   onPhotosReady,
@@ -40,13 +15,25 @@ export default function BulkPhotoUploader({
   const { config } = useCategory();
   const [photos, setPhotos] = useState<string[]>([]);
   const [processing, setProcessing] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
     setProcessing(true);
-    const resized = await Promise.all(files.map(resizeImage));
-    setPhotos((prev) => [...prev, ...resized]);
+    setPhotoError(null);
+    // Resize serially: decoding several raw phone photos at once OOMs mobile Safari.
+    const resized: string[] = [];
+    const failures: string[] = [];
+    for (const file of files) {
+      try {
+        resized.push(await resizePhoto(file));
+      } catch (err) {
+        failures.push(err instanceof Error ? err.message : "could not be processed");
+      }
+    }
+    if (resized.length > 0) setPhotos((prev) => [...prev, ...resized]);
+    if (failures.length > 0) setPhotoError(failures.join("; "));
     setProcessing(false);
   };
 
@@ -109,6 +96,12 @@ export default function BulkPhotoUploader({
 
       {processing && (
         <p className="text-[12px] text-text-tertiary text-center mt-2">Preparing photos...</p>
+      )}
+
+      {photoError && (
+        <div className="bg-danger-muted border border-danger/15 rounded-xl p-3 mt-3">
+          <p className="text-[13px] text-danger">Could not use {photoError}</p>
+        </div>
       )}
 
       {photos.length > 0 && (
