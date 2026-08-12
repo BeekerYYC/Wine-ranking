@@ -155,7 +155,13 @@ export default function Sidebar() {
       {/* Mobile bottom bar with floating scan button */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50">
         <div className="relative">
-          <div className="bg-surface/95 backdrop-blur-xl border-t border-border-subtle">
+          {/* The inset goes on this background wrapper, not on the tab row below:
+              that row has a fixed h-[68px], so padding there would squeeze the
+              tabs out of their own box instead of lifting the bar. Here the bar's
+              background simply extends into the home-indicator area and the tabs
+              stay put above it. env() is 0px on hardware without insets, so this
+              is inert everywhere else. */}
+          <div className="bg-surface/95 backdrop-blur-xl border-t border-border-subtle pb-[env(safe-area-inset-bottom,0px)]">
             <div className="flex items-center justify-around h-[68px] px-2 pb-2 pt-1">
               <MobileTab href="/" label="Home" icon={<HomeIcon />} active={isActive("/")} />
               <MobileTab href="/fridge" label="Cellar" icon={<CellarIcon />} active={isActive("/fridge") && pathname !== "/fridge/drink" && pathname !== "/fridge/scan"} />
