@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import BulkPhotoUploader from "@/components/BulkPhotoUploader";
 import { useCategory } from "@/lib/CategoryContext";
 
-type Stage = "upload" | "processing" | "done";
+type Stage = "upload" | "uploading" | "processing" | "done";
 
 export default function ScanPage() {
   const router = useRouter();
@@ -13,26 +13,74 @@ export default function ScanPage() {
   const [stage, setStage] = useState<Stage>("upload");
   const [batchId, setBatchId] = useState<number | null>(null);
   const [progress, setProgress] = useState({ processed: 0, total: 0 });
+  const [uploaded, setUploaded] = useState({ done: 0, total: 0 });
   const [itemsFound, setItemsFound] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  /** Read an error out of a failed response, whatever format it arrived in. */
+  const errorFrom = async (res: Response, fallback: string) => {
+    const body = await res.text().catch(() => "");
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed?.error) return String(parsed.error);
+    } catch {
+      // A payload rejected by the platform comes back as plain text, not JSON —
+      // calling res.json() on it used to surface a JSON parse error instead of
+      // anything the user could act on.
+      if (res.status === 413 || /too large/i.test(body)) {
+        return "That photo was too large to upload. Try re-taking it, or add photos in smaller groups.";
+      }
+    }
+    return `${fallback} (HTTP ${res.status})`;
+  };
+
   const startScan = async (photos: string[]) => {
-    setStage("processing");
+    setStage("uploading");
+    setUploaded({ done: 0, total: photos.length });
     setProgress({ processed: 0, total: photos.length });
     setError(null);
 
     try {
+      // Create the batch empty, then send one photo per request. Posting the whole
+      // array at once capped a scan at roughly 14 photos, because the combined
+      // body ran past the ~4.2 MB request limit.
       const batchRes = await fetch("/api/scan/batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photos, category }),
+        body: JSON.stringify({ category }),
       });
+      if (!batchRes.ok) throw new Error(await errorFrom(batchRes, "Could not start the scan"));
       const { id } = await batchRes.json();
       setBatchId(id);
+
+      const failed: number[] = [];
+      for (let i = 0; i < photos.length; i++) {
+        const res = await fetch(`/api/scan/batch/${id}/photos`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ photo: photos[i] }),
+        });
+        if (!res.ok) {
+          // One bad photo should not lose the whole batch.
+          failed.push(i + 1);
+          console.warn(`photo ${i + 1} upload failed:`, await errorFrom(res, "upload failed"));
+        }
+        setUploaded({ done: i + 1, total: photos.length });
+      }
+
+      if (failed.length === photos.length) {
+        throw new Error("None of the photos could be uploaded. Please try again.");
+      }
+      if (failed.length > 0) {
+        setError(`Photo${failed.length > 1 ? "s" : ""} ${failed.join(", ")} could not be uploaded — carrying on with the rest.`);
+      }
+
+      setStage("processing");
 
       let done = false;
       while (!done) {
         const res = await fetch(`/api/scan/batch/${id}/process`, { method: "POST" });
+        if (!res.ok) throw new Error(await errorFrom(res, "AI analysis failed"));
         const data = await res.json();
 
         if (data.error) {
@@ -68,6 +116,7 @@ export default function ScanPage() {
         <h1 className="text-2xl font-bold tracking-tight">{config.scanLabel}</h1>
         <p className="text-[13px] text-text-tertiary mt-0.5">
           {stage === "upload" && `Take photos of your ${config.itemNamePlural} or individual items`}
+          {stage === "uploading" && `Uploading ${uploaded.total} photo${uploaded.total !== 1 ? "s" : ""}...`}
           {stage === "processing" && "AI is analyzing your photos..."}
           {stage === "done" && "Scan complete!"}
         </p>
@@ -80,6 +129,28 @@ export default function ScanPage() {
       )}
 
       {stage === "upload" && <BulkPhotoUploader onPhotosReady={startScan} />}
+
+      {stage === "uploading" && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] text-text-primary font-medium">
+              Uploading photo {Math.min(uploaded.done + 1, uploaded.total)} of {uploaded.total}
+            </span>
+            <span className="text-[12px] text-gold tabular-nums">
+              {Math.round((uploaded.done / Math.max(uploaded.total, 1)) * 100)}%
+            </span>
+          </div>
+          <div className="bg-surface-raised rounded-full h-2 overflow-hidden border border-border-subtle">
+            <div
+              className="bg-gold h-full rounded-full transition-all duration-300"
+              style={{ width: `${(uploaded.done / Math.max(uploaded.total, 1)) * 100}%` }}
+            />
+          </div>
+          <p className="text-[11px] text-text-muted">
+            Photos are sent one at a time, so there is no limit on how many you can scan.
+          </p>
+        </div>
+      )}
 
       {stage === "processing" && (
         <div className="space-y-5">
