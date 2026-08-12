@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import BulkPhotoUploader from "@/components/BulkPhotoUploader";
 import { useCategory } from "@/lib/CategoryContext";
@@ -15,6 +15,7 @@ export default function ScanPage() {
   const [progress, setProgress] = useState({ processed: 0, total: 0 });
   const [uploaded, setUploaded] = useState({ done: 0, total: 0 });
   const [itemsFound, setItemsFound] = useState(0);
+  const itemsFoundRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
 
   /** Read an error out of a failed response, whatever format it arrived in. */
@@ -78,6 +79,9 @@ export default function ScanPage() {
       setStage("processing");
 
       let done = false;
+      // The process route reports a failed AI call as 200 + {error}, so without
+      // collecting these a dead API key looked exactly like "found 0 bottles".
+      const analysisErrors: string[] = [];
       while (!done) {
         const res = await fetch(`/api/scan/batch/${id}/process`, { method: "POST" });
         if (!res.ok) throw new Error(await errorFrom(res, "AI analysis failed"));
@@ -85,15 +89,26 @@ export default function ScanPage() {
 
         if (data.error) {
           console.warn("Photo processing error:", data.error);
+          analysisErrors.push(String(data.error));
         }
 
         if (data.batch) {
           const analyzed = data.batch.items.filter((i: { status: string }) => i.status === "analyzed").length;
           setItemsFound(analyzed);
+          itemsFoundRef.current = analyzed;
           setProgress({ processed: data.batch.processed, total: data.batch.totalPhotos });
         }
 
         done = data.done;
+      }
+
+      if (itemsFoundRef.current === 0 && analysisErrors.length > 0) {
+        const first = analysisErrors[0];
+        setError(
+          /credit balance|quota|rate limit|api key/i.test(first)
+            ? `The AI could not be reached: ${first.slice(0, 160)}`
+            : `No bottles could be identified. The AI reported: ${first.slice(0, 160)}`,
+        );
       }
 
       setStage("done");
