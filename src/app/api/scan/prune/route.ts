@@ -24,7 +24,7 @@ async function survey() {
       batch: { status: { in: FINISHED } },
       status: { in: ["confirmed", "rejected"] },
     },
-    select: { id: true, imageData: true, batchId: true },
+    select: { id: true, imageData: true, batchId: true, wineId: true },
   });
   const bytes = items.reduce((n, i) => n + (i.imageData?.length || 0), 0);
   return { items, bytes, batches: new Set(items.map((i) => i.batchId)).size };
@@ -46,6 +46,23 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ pruned: 0, freedKB: 0, note: "Nothing to prune." });
   }
 
+  // Recover before discarding. "Confirmed items already copied their photo onto
+  // the wine" holds for current code, but not for history: the merge path used to
+  // update only the quantity, and multi-bottle photos used to store no image at
+  // all — so a scan item can hold the only surviving copy of a bottle's photo.
+  // Hand it back to any wine still missing one rather than deleting it.
+  const recovered: number[] = [];
+  for (const item of items) {
+    if (item.wineId == null || !item.imageData) continue;
+    const wine = await prisma.wine.findUnique({
+      where: { id: item.wineId },
+      select: { id: true, imageData: true },
+    });
+    if (!wine || wine.imageData) continue;
+    await prisma.wine.update({ where: { id: wine.id }, data: { imageData: item.imageData } });
+    recovered.push(wine.id);
+  }
+
   await prisma.scanItem.updateMany({
     where: { id: { in: items.map((i) => i.id) } },
     data: { imageData: null },
@@ -55,5 +72,7 @@ export async function POST(_req: NextRequest) {
     pruned: items.length,
     acrossBatches: batches,
     freedKB: Math.round(bytes / 1024),
+    photosRecoveredToWines: recovered.length,
+    recoveredWineIds: recovered,
   });
 }
