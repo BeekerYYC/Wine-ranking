@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
+import { wineImageSrc } from "@/lib/wineImage";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -18,7 +19,7 @@ interface Activity {
   color: string | null;
   rating: number | null;
   onlineRating: number | null;
-  imageData: string | null;
+  hasImage: boolean;
   labelImageUrl: string | null;
   region: string | null;
   country: string | null;
@@ -355,8 +356,8 @@ export default function Dashboard() {
                 className="flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-surface-overlay transition-colors"
               >
                 <div className="w-10 h-12 flex-shrink-0 flex items-center justify-center bg-surface-overlay rounded-lg">
-                  {act.imageData || act.labelImageUrl ? (
-                    <img src={act.imageData || act.labelImageUrl || ""} alt="" className="h-full object-contain" />
+                  {wineImageSrc({ id: act.wineId, hasImage: act.hasImage, labelImageUrl: act.labelImageUrl }) ? (
+                    <img src={wineImageSrc({ id: act.wineId, hasImage: act.hasImage, labelImageUrl: act.labelImageUrl }) || ""} alt="" className="h-full object-contain" />
                   ) : (
                     <span className="text-lg opacity-40">🍷</span>
                   )}
