@@ -49,9 +49,7 @@ export async function GET(req: NextRequest) {
   // over 20 of 29 bottles is not the same claim as a total over all of them.
   const inCellar = wines.filter((w) => w.status === "collection" && w.quantity > 0);
   const priced = inCellar.filter((w) => w.marketPrice);
-  const marketValue = priced.reduce((sum, w) => sum + (w.marketPrice || 0) * w.quantity, 0);
-  const marketPricedBottles = priced.reduce((sum, w) => sum + w.quantity, 0);
-  const marketAvgBottle = marketPricedBottles > 0 ? marketValue / marketPricedBottles : 0;
+
   // Whichever currency most of the estimates came back in.
   const currencyCounts: Record<string, number> = {};
   priced.forEach((w) => {
@@ -60,6 +58,17 @@ export async function GET(req: NextRequest) {
   });
   const marketCurrency =
     Object.entries(currencyCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "CAD";
+
+  // Total only what shares the headline currency. Searches come back in whatever
+  // the listings were quoted in — a real cellar produced 8 CAD prices and 3 USD —
+  // and adding those together would have produced a number in no currency at all.
+  // No conversion is applied because that needs a live FX rate this app does not
+  // have; the odd ones out are counted instead so the UI can say so.
+  const sameCurrency = priced.filter((w) => (w.marketCurrency || "CAD") === marketCurrency);
+  const marketValue = sameCurrency.reduce((sum, w) => sum + (w.marketPrice || 0) * w.quantity, 0);
+  const marketPricedBottles = sameCurrency.reduce((sum, w) => sum + w.quantity, 0);
+  const marketAvgBottle = marketPricedBottles > 0 ? marketValue / marketPricedBottles : 0;
+  const marketOtherCurrencyEntries = priced.length - sameCurrency.length;
 
   const totalBottles = wines.reduce((sum, w) => sum + w.quantity, 0) + bottlesConsumed;
   const inCollection = wines.filter((w) => w.status === "collection").reduce((sum, w) => sum + w.quantity, 0);
@@ -238,7 +247,8 @@ export async function GET(req: NextRequest) {
     marketValue: Math.round(marketValue * 100) / 100,
     marketAvgBottle: Math.round(marketAvgBottle * 100) / 100,
     marketCurrency,
-    marketPricedEntries: priced.length,
+    marketPricedEntries: sameCurrency.length,
+    marketOtherCurrencyEntries,
     marketTotalEntries: inCellar.length,
     marketPricedBottles,
     avgDaysBetween: Math.round(avgDaysBetween * 10) / 10,
