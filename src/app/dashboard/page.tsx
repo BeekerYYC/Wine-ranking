@@ -36,6 +36,11 @@ interface Stats {
   avgRating: number;
   avgPrice: number;
   totalSpent: number;
+  marketValue: number;
+  marketAvgBottle: number;
+  marketCurrency: string;
+  marketPricedEntries: number;
+  marketTotalEntries: number;
   avgDaysBetween: number;
   uniqueVarietals: number;
   uniqueRegions: number;
@@ -212,7 +217,21 @@ export default function Dashboard() {
           <OverviewMetric icon={<IconBottle />} value={stats.inCollection} label="Bottles in Cellar" delta={stats.addedThisWeek > 0 ? `+${stats.addedThisWeek} this week` : "No additions this week"} />
           <OverviewMetric icon={<IconWineGlass />} value={stats.consumedBottles ?? stats.consumed} label="Bottles Consumed" delta={stats.consumedThisMonth > 0 ? `+${stats.consumedThisMonth} this month` : "None this month"} />
           <OverviewMetric icon={<IconGrape />} value={stats.uniqueRegions} label="Regions" delta={stats.uniqueCountries > 0 ? `${stats.uniqueCountries} countries` : ""} />
-          <OverviewMetric icon={<IconTag />} value={`$${stats.totalSpent.toLocaleString()}`} label="Est. Collection Value" delta={`Avg $${Math.round(stats.avgPrice)}`} />
+          {/* Driven by researched market prices, not by what was paid. totalSpent
+              used to fill this tile, which made "collection value" mean the
+              opposite of what it said — and reads $0 while no purchase prices are
+              recorded. The delta states coverage so a partial total is not
+              mistaken for the whole cellar. */}
+          <OverviewMetric
+            icon={<IconTag />}
+            value={stats.marketValue > 0 ? `$${Math.round(stats.marketValue).toLocaleString()}` : "—"}
+            label={`Est. Market Value${stats.marketCurrency ? ` (${stats.marketCurrency})` : ""}`}
+            delta={
+              stats.marketPricedEntries > 0
+                ? `Avg $${Math.round(stats.marketAvgBottle)}/bottle · ${stats.marketPricedEntries}/${stats.marketTotalEntries} priced`
+                : "No prices yet"
+            }
+          />
         </div>
       </div>
 

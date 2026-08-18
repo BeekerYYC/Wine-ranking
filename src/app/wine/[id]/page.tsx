@@ -17,6 +17,8 @@ interface Wine {
   id: number; name: string; winery?: string | null; vintage?: number | null;
   varietal?: string | null; region?: string | null; country?: string | null;
   color?: string | null; price?: number | null; rating?: number | null;
+  marketPrice?: number | null; marketCurrency?: string | null;
+  marketPriceNote?: string | null; marketPriceAt?: string | null;
   notes?: string | null; description?: string | null; imageData?: string | null;
   labelImageUrl?: string | null;
   tastingNotes?: string | null; drinkingWindow?: string | null;
@@ -41,6 +43,8 @@ export default function WineDetail() {
   const [quantity, setQuantity] = useState(1);
   const [saving, setSaving] = useState(false);
   const [findingImage, setFindingImage] = useState(false);
+  const [pricing, setPricing] = useState(false);
+  const [priceError, setPriceError] = useState<string | null>(null);
   const [enriching, setEnriching] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
   const [showConsume, setShowConsume] = useState(false);
@@ -119,6 +123,21 @@ export default function WineDetail() {
       setEnrichError(e instanceof Error ? e.message : "Enrichment failed");
     } finally {
       setEnriching(false);
+    }
+  };
+
+  const refreshMarketPrice = async () => {
+    setPricing(true);
+    setPriceError(null);
+    try {
+      const res = await fetch(`/api/wines/${id}/market-price`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Lookup failed (HTTP ${res.status})`);
+      setWine((w) => (w ? { ...w, ...data.wine } : w));
+    } catch (e) {
+      setPriceError(e instanceof Error ? e.message : "Could not fetch a price");
+    } finally {
+      setPricing(false);
     }
   };
 
@@ -222,6 +241,49 @@ export default function WineDetail() {
           }`}>AI {Math.round(wine.confidence * 100)}% match</span>
         )}
       </div>
+
+        {/* Market price: what the bottle trades for now, as opposed to wine.price
+            which is what was paid. Labelled an estimate and shown with its source
+            and date, because it comes from an AI web search, not a price feed. */}
+        <div className="bg-surface-raised border border-border-subtle rounded-xl p-4 mb-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] text-text-muted uppercase tracking-wider font-medium">Market price (est.)</p>
+              {wine.marketPrice != null ? (
+                <>
+                  <p className="mt-1">
+                    <span className="font-serif text-[26px] font-semibold tabular-nums">
+                      ${wine.marketPrice.toFixed(2)}
+                    </span>
+                    <span className="text-[12px] text-text-tertiary ml-1.5">
+                      {wine.marketCurrency || "CAD"} / bottle
+                    </span>
+                  </p>
+                  {wine.marketPriceNote && (
+                    <p className="text-[11.5px] text-text-tertiary mt-1">{wine.marketPriceNote}</p>
+                  )}
+                  {wine.marketPriceAt && (
+                    <p className="text-[11px] text-text-muted mt-0.5">
+                      Checked {new Date(wine.marketPriceAt).toLocaleDateString()}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-[13px] text-text-tertiary mt-1">
+                  Not looked up yet — fetch it to include this bottle in your collection value.
+                </p>
+              )}
+              {priceError && <p className="text-[12px] text-danger mt-2">{priceError}</p>}
+            </div>
+            <button
+              onClick={refreshMarketPrice}
+              disabled={pricing}
+              className="flex-shrink-0 bg-surface-overlay hover:bg-surface border border-border-subtle disabled:opacity-40 text-text-secondary px-3 py-2 rounded-lg text-[12px] font-medium transition-all"
+            >
+              {pricing ? "Searching..." : wine.marketPrice != null ? "Refresh" : "Find price"}
+            </button>
+          </div>
+        </div>
 
       <section className="bg-surface-raised rounded-xl border border-border-subtle p-4 mb-2.5">
         <div className="flex items-center justify-between mb-3">

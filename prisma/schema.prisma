@@ -32,6 +32,14 @@ model Wine {
   occasion      String?  // comma-separated: date-night, party, gift, weeknight, celebration
   foodPairings  String?  // AI-generated food pairings
   onlineRating  Float?   // estimated critic/community score (out of 100)
+  // Current market price for a single bottle, researched by AI web search — an
+  // estimate of what the wine trades for, distinct from `price` which is what was
+  // actually paid. Currency is stored because listings are quoted in whatever the
+  // search turned up rather than one fixed currency.
+  marketPrice     Float?
+  marketCurrency  String?
+  marketPriceNote String?
+  marketPriceAt   DateTime?
   confidence    Float?   // AI identification confidence 0-1
   storeId       Int?
   store         Store?   @relation(fields: [storeId], references: [id])
