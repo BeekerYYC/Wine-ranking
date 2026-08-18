@@ -218,6 +218,12 @@ export async function enrichWine(wineId: number): Promise<{ success: boolean; er
       data.marketCurrency = market.currency;
       data.marketPriceNote = market.note;
       data.marketPriceAt = new Date();
+    } else if (!wine.marketPrice) {
+      // The lookup ran and found nothing — record that, so the wine page can say
+      // "no listing found" instead of pretending no search ever happened. Never
+      // touches a wine that already has a price.
+      data.marketPriceAt = new Date();
+      data.marketPriceNote = "No credible retail listing found";
     }
 
     await prisma.wine.update({ where: { id: wineId }, data });

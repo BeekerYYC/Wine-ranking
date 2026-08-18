@@ -268,6 +268,15 @@ export default function WineDetail() {
                     </p>
                   )}
                 </>
+              ) : wine.marketPriceAt ? (
+                <>
+                  <p className="text-[13px] text-text-tertiary mt-1">
+                    No retail listing found — likely a small-production bottle.
+                  </p>
+                  <p className="text-[11px] text-text-muted mt-0.5">
+                    Checked {new Date(wine.marketPriceAt).toLocaleDateString()}
+                  </p>
+                </>
               ) : (
                 <p className="text-[13px] text-text-tertiary mt-1">
                   Not looked up yet — fetch it to include this bottle in your collection value.
@@ -280,7 +289,7 @@ export default function WineDetail() {
               disabled={pricing}
               className="flex-shrink-0 bg-surface-overlay hover:bg-surface border border-border-subtle disabled:opacity-40 text-text-secondary px-3 py-2 rounded-lg text-[12px] font-medium transition-all"
             >
-              {pricing ? "Searching..." : wine.marketPrice != null ? "Refresh" : "Find price"}
+              {pricing ? "Searching..." : wine.marketPrice != null ? "Refresh" : wine.marketPriceAt ? "Try again" : "Find price"}
             </button>
           </div>
         </div>
