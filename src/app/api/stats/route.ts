@@ -143,6 +143,26 @@ export async function GET(req: NextRequest) {
   // Logs may be incomplete for pre-feature data — fall back to consumedAt flag.
   const consumedThisMonth = Math.max(consumedThisMonthFromLogs, consumedThisMonthFromFlag);
 
+  // Last-30-days view of the overview tiles. The dashboard's period selector
+  // existed but read into nothing — every tile stayed all-time whatever it said.
+  // A stock count has no monthly version, so the month view reports flows:
+  // bottles added, bottles consumed, regions explored, market value added.
+  // The 30-day rolling window matches the existing addedThisMonth/consumedThisMonth.
+  const addedInWindow = wines.filter((w) => now - new Date(w.createdAt).getTime() < monthMs);
+  const monthPriced = addedInWindow.filter(
+    (w) => w.marketPrice && (w.marketCurrency || "CAD") === marketCurrency,
+  );
+  const month = {
+    entriesAdded: addedInWindow.length,
+    bottlesAdded: addedInWindow.reduce((sum, w) => sum + w.quantity, 0),
+    consumedBottles: consumedThisMonth,
+    uniqueRegions: new Set(addedInWindow.map((w) => w.region).filter(Boolean)).size,
+    uniqueCountries: new Set(addedInWindow.map((w) => w.country).filter(Boolean)).size,
+    marketValueAdded:
+      Math.round(monthPriced.reduce((sum, w) => sum + (w.marketPrice || 0) * w.quantity, 0) * 100) / 100,
+    marketPricedEntries: monthPriced.length,
+  };
+
   const ratingDist = [1, 2, 3, 4, 5].map((r) => ({
     rating: r,
     count: wines.filter((w) => w.rating === r).length,
@@ -251,6 +271,7 @@ export async function GET(req: NextRequest) {
     marketOtherCurrencyEntries,
     marketTotalEntries: inCellar.length,
     marketPricedBottles,
+    month,
     avgDaysBetween: Math.round(avgDaysBetween * 10) / 10,
     varietalBreakdown, colorBreakdown, countryBreakdown,
     priceRating, monthlyAdditions, ratingDist, topWines, bestValue,

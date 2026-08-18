@@ -42,6 +42,15 @@ interface Stats {
   marketPricedEntries: number;
   marketTotalEntries: number;
   marketOtherCurrencyEntries: number;
+  month: {
+    entriesAdded: number;
+    bottlesAdded: number;
+    consumedBottles: number;
+    uniqueRegions: number;
+    uniqueCountries: number;
+    marketValueAdded: number;
+    marketPricedEntries: number;
+  };
   avgDaysBetween: number;
   uniqueVarietals: number;
   uniqueRegions: number;
@@ -214,25 +223,55 @@ export default function Dashboard() {
             <option value="all">All time</option>
           </select>
         </div>
+        {/* The selector above genuinely scopes these four tiles now — it used to
+            set state that nothing read, so both options showed all-time numbers.
+            Month view reports the last 30 days' flows (added, consumed, regions
+            explored, value added); stock counts like "Bottles in Cellar" only
+            exist in the all-time view because a stock has no monthly version. */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <OverviewMetric icon={<IconBottle />} value={stats.inCollection} label="Bottles in Cellar" delta={stats.addedThisWeek > 0 ? `+${stats.addedThisWeek} this week` : "No additions this week"} />
-          <OverviewMetric icon={<IconWineGlass />} value={stats.consumedBottles ?? stats.consumed} label="Bottles Consumed" delta={stats.consumedThisMonth > 0 ? `+${stats.consumedThisMonth} this month` : "None this month"} />
-          <OverviewMetric icon={<IconGrape />} value={stats.uniqueRegions} label="Regions" delta={stats.uniqueCountries > 0 ? `${stats.uniqueCountries} countries` : ""} />
+          {period === "month" ? (
+            <OverviewMetric icon={<IconBottle />} value={stats.month.bottlesAdded} label="Bottles Added" delta={`${stats.month.entriesAdded} wine${stats.month.entriesAdded !== 1 ? "s" : ""} · last 30 days`} />
+          ) : (
+            <OverviewMetric icon={<IconBottle />} value={stats.inCollection} label="Bottles in Cellar" delta={stats.addedThisWeek > 0 ? `+${stats.addedThisWeek} this week` : "No additions this week"} />
+          )}
+          {period === "month" ? (
+            <OverviewMetric icon={<IconWineGlass />} value={stats.month.consumedBottles} label="Bottles Consumed" delta="Last 30 days" />
+          ) : (
+            <OverviewMetric icon={<IconWineGlass />} value={stats.consumedBottles ?? stats.consumed} label="Bottles Consumed" delta={stats.consumedThisMonth > 0 ? `+${stats.consumedThisMonth} this month` : "None this month"} />
+          )}
+          {period === "month" ? (
+            <OverviewMetric icon={<IconGrape />} value={stats.month.uniqueRegions} label="Regions Explored" delta={stats.month.uniqueCountries > 0 ? `${stats.month.uniqueCountries} countries · last 30 days` : "Last 30 days"} />
+          ) : (
+            <OverviewMetric icon={<IconGrape />} value={stats.uniqueRegions} label="Regions" delta={stats.uniqueCountries > 0 ? `${stats.uniqueCountries} countries` : ""} />
+          )}
           {/* Driven by researched market prices, not by what was paid. totalSpent
               used to fill this tile, which made "collection value" mean the
               opposite of what it said — and reads $0 while no purchase prices are
               recorded. The delta states coverage so a partial total is not
               mistaken for the whole cellar. */}
-          <OverviewMetric
-            icon={<IconTag />}
-            value={stats.marketValue > 0 ? `$${Math.round(stats.marketValue).toLocaleString()}` : "—"}
-            label={`Est. Market Value${stats.marketCurrency ? ` (${stats.marketCurrency})` : ""}`}
-            delta={
-              stats.marketPricedEntries > 0
-                ? `Avg $${Math.round(stats.marketAvgBottle)}/bottle · ${stats.marketPricedEntries}/${stats.marketTotalEntries} priced${stats.marketOtherCurrencyEntries > 0 ? ` · ${stats.marketOtherCurrencyEntries} in other currencies` : ""}`
-                : "No prices yet"
-            }
-          />
+          {period === "month" ? (
+            <OverviewMetric
+              icon={<IconTag />}
+              value={stats.month.marketValueAdded > 0 ? `$${Math.round(stats.month.marketValueAdded).toLocaleString()}` : "—"}
+              label={`Value Added${stats.marketCurrency ? ` (${stats.marketCurrency})` : ""}`}
+              delta={
+                stats.month.marketPricedEntries > 0
+                  ? `${stats.month.marketPricedEntries}/${stats.month.entriesAdded} priced · last 30 days`
+                  : "No priced additions"
+              }
+            />
+          ) : (
+            <OverviewMetric
+              icon={<IconTag />}
+              value={stats.marketValue > 0 ? `$${Math.round(stats.marketValue).toLocaleString()}` : "—"}
+              label={`Est. Market Value${stats.marketCurrency ? ` (${stats.marketCurrency})` : ""}`}
+              delta={
+                stats.marketPricedEntries > 0
+                  ? `Avg $${Math.round(stats.marketAvgBottle)}/bottle · ${stats.marketPricedEntries}/${stats.marketTotalEntries} priced${stats.marketOtherCurrencyEntries > 0 ? ` · ${stats.marketOtherCurrencyEntries} in other currencies` : ""}`
+                  : "No prices yet"
+              }
+            />
+          )}
         </div>
       </div>
 
