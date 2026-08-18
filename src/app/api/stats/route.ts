@@ -50,25 +50,23 @@ export async function GET(req: NextRequest) {
   const inCellar = wines.filter((w) => w.status === "collection" && w.quantity > 0);
   const priced = inCellar.filter((w) => w.marketPrice);
 
-  // Whichever currency most of the estimates came back in.
-  const currencyCounts: Record<string, number> = {};
-  priced.forEach((w) => {
-    const c = w.marketCurrency || "CAD";
-    currencyCounts[c] = (currencyCounts[c] || 0) + 1;
-  });
-  const marketCurrency =
-    Object.entries(currencyCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "CAD";
-
-  // Total only what shares the headline currency. Searches come back in whatever
-  // the listings were quoted in — a real cellar produced 8 CAD prices and 3 USD —
-  // and adding those together would have produced a number in no currency at all.
-  // No conversion is applied because that needs a live FX rate this app does not
-  // have; the odd ones out are counted instead so the UI can say so.
-  const sameCurrency = priced.filter((w) => (w.marketCurrency || "CAD") === marketCurrency);
-  const marketValue = sameCurrency.reduce((sum, w) => sum + (w.marketPrice || 0) * w.quantity, 0);
-  const marketPricedBottles = sameCurrency.reduce((sum, w) => sum + w.quantity, 0);
+  // The headline total is CAD. USD estimates are folded in at a deliberately
+  // hardcoded 1.40 — the owner chose a fixed approximation over a live FX feed,
+  // and the stored price keeps its original currency so the approximation never
+  // contaminates the data. Currencies without a rate here stay excluded and are
+  // counted so the UI can say so.
+  const FX_TO_CAD: Record<string, number> = { CAD: 1, USD: 1.4 };
+  const marketCurrency = "CAD";
+  const toCad = (w: { marketPrice: number | null; marketCurrency: string | null }) => {
+    const rate = FX_TO_CAD[w.marketCurrency || "CAD"];
+    return rate ? (w.marketPrice || 0) * rate : null;
+  };
+  const convertible = priced.filter((w) => toCad(w) !== null);
+  const marketValue = convertible.reduce((sum, w) => sum + (toCad(w) || 0) * w.quantity, 0);
+  const marketPricedBottles = convertible.reduce((sum, w) => sum + w.quantity, 0);
   const marketAvgBottle = marketPricedBottles > 0 ? marketValue / marketPricedBottles : 0;
-  const marketOtherCurrencyEntries = priced.length - sameCurrency.length;
+  const marketOtherCurrencyEntries = priced.length - convertible.length;
+  const marketConvertedEntries = convertible.filter((w) => (w.marketCurrency || "CAD") !== "CAD").length;
 
   const totalBottles = wines.reduce((sum, w) => sum + w.quantity, 0) + bottlesConsumed;
   const inCollection = wines.filter((w) => w.status === "collection").reduce((sum, w) => sum + w.quantity, 0);
@@ -149,9 +147,7 @@ export async function GET(req: NextRequest) {
   // bottles added, bottles consumed, regions explored, market value added.
   // The 30-day rolling window matches the existing addedThisMonth/consumedThisMonth.
   const addedInWindow = wines.filter((w) => now - new Date(w.createdAt).getTime() < monthMs);
-  const monthPriced = addedInWindow.filter(
-    (w) => w.marketPrice && (w.marketCurrency || "CAD") === marketCurrency,
-  );
+  const monthPriced = addedInWindow.filter((w) => w.marketPrice && toCad(w) !== null);
   const month = {
     entriesAdded: addedInWindow.length,
     bottlesAdded: addedInWindow.reduce((sum, w) => sum + w.quantity, 0),
@@ -159,7 +155,7 @@ export async function GET(req: NextRequest) {
     uniqueRegions: new Set(addedInWindow.map((w) => w.region).filter(Boolean)).size,
     uniqueCountries: new Set(addedInWindow.map((w) => w.country).filter(Boolean)).size,
     marketValueAdded:
-      Math.round(monthPriced.reduce((sum, w) => sum + (w.marketPrice || 0) * w.quantity, 0) * 100) / 100,
+      Math.round(monthPriced.reduce((sum, w) => sum + (toCad(w) || 0) * w.quantity, 0) * 100) / 100,
     marketPricedEntries: monthPriced.length,
   };
 
@@ -267,8 +263,9 @@ export async function GET(req: NextRequest) {
     marketValue: Math.round(marketValue * 100) / 100,
     marketAvgBottle: Math.round(marketAvgBottle * 100) / 100,
     marketCurrency,
-    marketPricedEntries: sameCurrency.length,
+    marketPricedEntries: convertible.length,
     marketOtherCurrencyEntries,
+    marketConvertedEntries,
     marketTotalEntries: inCellar.length,
     marketPricedBottles,
     month,

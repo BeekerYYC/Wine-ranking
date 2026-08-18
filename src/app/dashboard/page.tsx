@@ -42,6 +42,7 @@ interface Stats {
   marketPricedEntries: number;
   marketTotalEntries: number;
   marketOtherCurrencyEntries: number;
+  marketConvertedEntries: number;
   month: {
     entriesAdded: number;
     bottlesAdded: number;
@@ -267,7 +268,7 @@ export default function Dashboard() {
               label={`Est. Market Value${stats.marketCurrency ? ` (${stats.marketCurrency})` : ""}`}
               delta={
                 stats.marketPricedEntries > 0
-                  ? `Avg $${Math.round(stats.marketAvgBottle)}/bottle · ${stats.marketPricedEntries}/${stats.marketTotalEntries} priced${stats.marketOtherCurrencyEntries > 0 ? ` · ${stats.marketOtherCurrencyEntries} in other currencies` : ""}`
+                  ? `Avg $${Math.round(stats.marketAvgBottle)}/bottle · ${stats.marketPricedEntries}/${stats.marketTotalEntries} priced${stats.marketConvertedEntries > 0 ? ` · ${stats.marketConvertedEntries} conv. from USD @1.40` : ""}${stats.marketOtherCurrencyEntries > 0 ? ` · ${stats.marketOtherCurrencyEntries} in other currencies` : ""}`
                   : "No prices yet"
               }
             />
