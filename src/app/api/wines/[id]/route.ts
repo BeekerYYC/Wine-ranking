@@ -70,6 +70,14 @@ export async function PUT(
     occasion: has("occasion") ? body.occasion : undefined,
     foodPairings: has("foodPairings") ? body.foodPairings : undefined,
     onlineRating: float("onlineRating"),
+    // Market price is editable so a real listing — a retailer invoice, a shelf
+    // tag — can replace or fill in the AI-searched estimate. Setting a price
+    // stamps when and defaults the currency; other market fields follow the
+    // only-if-sent rule like everything else here.
+    marketPrice: float("marketPrice"),
+    marketCurrency: has("marketCurrency") ? (body.marketCurrency || null) : (has("marketPrice") && body.marketPrice ? "CAD" : undefined),
+    marketPriceNote: text("marketPriceNote"),
+    marketPriceAt: has("marketPrice") && body.marketPrice ? new Date() : undefined,
     listId: int("listId"),
   };
 
