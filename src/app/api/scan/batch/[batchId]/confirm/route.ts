@@ -81,6 +81,8 @@ export async function POST(
       // all merged into one "Ventoux Les 3 Villages" and no new bottle ever
       // appeared. With neither a vintage nor a producer to corroborate the name,
       // treat it as a new bottle and let the user merge deliberately.
+      const wineColor = item.edits?.color ?? scanItem.color;
+
       let existing = null;
       if (wineVintage || wineWinery) {
         const existingWhere: Record<string, unknown> = {
@@ -88,8 +90,24 @@ export async function POST(
           category,
           status: "collection",
         };
-        if (wineVintage) existingWhere.vintage = wineVintage;
         if (wineWinery) existingWhere.winery = { equals: wineWinery, mode: "insensitive" };
+
+        // Vintage must agree either way round. Matching only when the incoming
+        // scan has one let a bottle whose year the AI could not read merge into a
+        // specific vintage already in the cellar.
+        existingWhere.vintage = wineVintage ?? null;
+
+        // Never merge across colours. A producer's red and rosé routinely share a
+        // name — "Ventoux Les 3 Villages" is both — and merging them collapsed two
+        // different wines into one entry with one photo. An unread colour stays
+        // permissive, since that is genuinely unknown rather than different.
+        if (wineColor) {
+          existingWhere.OR = [
+            { color: { equals: wineColor, mode: "insensitive" } },
+            { color: null },
+          ];
+        }
+
         existing = await prisma.wine.findFirst({ where: existingWhere });
       }
 
