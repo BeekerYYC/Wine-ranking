@@ -42,6 +42,25 @@ export async function GET(req: NextRequest) {
     return sum + (w.price || 0) * (w.quantity + consumedQty);
   }, 0);
 
+  // What the cellar is worth now, from the researched market prices. Kept apart
+  // from totalSpent, which is what was actually paid — the dashboard previously
+  // labelled totalSpent "Est. Collection Value", which it never was.
+  // Coverage is reported alongside so the figure can be shown honestly: a total
+  // over 20 of 29 bottles is not the same claim as a total over all of them.
+  const inCellar = wines.filter((w) => w.status === "collection" && w.quantity > 0);
+  const priced = inCellar.filter((w) => w.marketPrice);
+  const marketValue = priced.reduce((sum, w) => sum + (w.marketPrice || 0) * w.quantity, 0);
+  const marketPricedBottles = priced.reduce((sum, w) => sum + w.quantity, 0);
+  const marketAvgBottle = marketPricedBottles > 0 ? marketValue / marketPricedBottles : 0;
+  // Whichever currency most of the estimates came back in.
+  const currencyCounts: Record<string, number> = {};
+  priced.forEach((w) => {
+    const c = w.marketCurrency || "CAD";
+    currencyCounts[c] = (currencyCounts[c] || 0) + 1;
+  });
+  const marketCurrency =
+    Object.entries(currencyCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "CAD";
+
   const totalBottles = wines.reduce((sum, w) => sum + w.quantity, 0) + bottlesConsumed;
   const inCollection = wines.filter((w) => w.status === "collection").reduce((sum, w) => sum + w.quantity, 0);
   const consumed = winesConsumed;
@@ -216,6 +235,12 @@ export async function GET(req: NextRequest) {
     avgRating: Math.round(avgRating * 10) / 10,
     avgPrice: Math.round(avgPrice * 100) / 100,
     totalSpent: Math.round(totalSpent * 100) / 100,
+    marketValue: Math.round(marketValue * 100) / 100,
+    marketAvgBottle: Math.round(marketAvgBottle * 100) / 100,
+    marketCurrency,
+    marketPricedEntries: priced.length,
+    marketTotalEntries: inCellar.length,
+    marketPricedBottles,
     avgDaysBetween: Math.round(avgDaysBetween * 10) / 10,
     varietalBreakdown, colorBreakdown, countryBreakdown,
     priceRating, monthlyAdditions, ratingDist, topWines, bestValue,

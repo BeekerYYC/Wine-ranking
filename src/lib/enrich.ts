@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/db";
+import { findMarketPrice } from "@/lib/marketPrice";
 
 const anthropic = new Anthropic();
 
@@ -181,8 +182,9 @@ export async function enrichWine(wineId: number): Promise<{ success: boolean; er
   const prompt = promptFn(wine as unknown as Record<string, unknown>);
 
   try {
-    // Run enrichment + label image search in parallel
-    const [message, labelImageUrl] = await Promise.all([
+    // Run enrichment, the label image search and the market price lookup in
+    // parallel — all three are independent web/LLM calls.
+    const [message, labelImageUrl, market] = await Promise.all([
       anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 2048,
@@ -195,6 +197,7 @@ export async function enrichWine(wineId: number): Promise<{ success: boolean; er
       }),
       // Only search for label image if missing
       wine.labelImageUrl ? Promise.resolve(null) : findLabelImageUrl(wine as unknown as Record<string, unknown>),
+      findMarketPrice(wine),
     ]);
 
     // Take the first text block rather than assuming content[0] is one.
@@ -210,6 +213,12 @@ export async function enrichWine(wineId: number): Promise<{ success: boolean; er
     if (parsed.foodPairings) data.foodPairings = parsed.foodPairings;
     if (parsed.onlineRating) data.onlineRating = parseFloat(String(parsed.onlineRating));
     if (labelImageUrl) data.labelImageUrl = labelImageUrl;
+    if (market) {
+      data.marketPrice = market.price;
+      data.marketCurrency = market.currency;
+      data.marketPriceNote = market.note;
+      data.marketPriceAt = new Date();
+    }
 
     await prisma.wine.update({ where: { id: wineId }, data });
     return { success: true };
