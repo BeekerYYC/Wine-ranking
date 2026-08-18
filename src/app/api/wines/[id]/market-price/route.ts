@@ -21,10 +21,23 @@ export async function POST(
 
   const market = await findMarketPrice(wine);
   if (!market) {
-    return NextResponse.json(
-      { error: "No credible market price found for this wine" },
-      { status: 404 },
-    );
+    // Record that the lookup happened. Without this, a wine the search found no
+    // listing for was indistinguishable from one never looked up, and the page
+    // said "Not looked up yet" about a search that had already run.
+    const updated = await prisma.wine.update({
+      where: { id: wineId },
+      data: {
+        marketPriceAt: new Date(),
+        marketPriceNote: "No credible retail listing found",
+        // Deliberately leave marketPrice as-is: a failed refresh must not erase
+        // a previously found price.
+      },
+      select: {
+        id: true, name: true, marketPrice: true, marketCurrency: true,
+        marketPriceNote: true, marketPriceAt: true,
+      },
+    });
+    return NextResponse.json({ ok: false, wine: updated });
   }
 
   const updated = await prisma.wine.update({
