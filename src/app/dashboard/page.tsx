@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
-import { wineImageSrc } from "@/lib/wineImage";
+import WineImage from "@/components/WineImage";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -157,9 +157,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     setStats(null);
-    fetch("/api/wines/fix-consumed", { method: "POST" }).then(() => {
-      fetch(`/api/stats?category=${category}`).then((r) => r.json()).then(setStats);
-    });
+    // This used to POST /api/wines/fix-consumed first — a database write on every
+    // visit to repair empty bottles left "in collection". Those are now marked
+    // consumed when they reach zero (consume, audit, quantity stepper).
+    fetch(`/api/stats?category=${category}`).then((r) => r.json()).then(setStats);
   }, [category]);
 
   if (!stats) return (
@@ -421,11 +422,17 @@ export default function Dashboard() {
                 className="flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-surface-overlay transition-colors"
               >
                 <div className="w-10 h-12 flex-shrink-0 flex items-center justify-center bg-surface-overlay rounded-lg">
-                  {wineImageSrc({ id: act.wineId, hasImage: act.hasImage, labelImageUrl: act.labelImageUrl }) ? (
-                    <img src={wineImageSrc({ id: act.wineId, hasImage: act.hasImage, labelImageUrl: act.labelImageUrl }) || ""} alt="" className="h-full object-contain" />
-                  ) : (
-                    <span className="text-lg opacity-40">🍷</span>
-                  )}
+                  {/* Falls back to the emoji when a label image fails to load,
+                      instead of a broken-image icon. */}
+                  <WineImage
+                    wineId={act.wineId}
+                    hasImage={act.hasImage}
+                    labelImageUrl={act.labelImageUrl}
+                    alt=""
+                    color={act.color}
+                    className="h-full object-contain"
+                    fallbackEmoji="🍷"
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-serif text-[13.5px] font-semibold text-text-primary truncate">

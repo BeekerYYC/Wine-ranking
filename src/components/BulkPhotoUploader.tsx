@@ -53,7 +53,7 @@ export default function BulkPhotoUploader({
               <button
                 type="button"
                 onClick={() => removePhoto(i)}
-                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-bg/80 text-text-secondary flex items-center justify-center text-xs hover:text-text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-bg/80 text-text-secondary flex items-center justify-center text-xs hover:text-text-primary [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus:opacity-100 transition-opacity"
               >
                 ×
               </button>

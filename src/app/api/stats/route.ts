@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { normalizeColor } from "@/lib/colors";
+import { idsWithPhoto, WINE_WITHOUT_PHOTO } from "@/lib/wineSelect";
 
 export async function GET(req: NextRequest) {
   const category = req.nextUrl.searchParams.get("category") || "wine";
 
-  const wines = await prisma.wine.findMany({ where: { category } });
+  // Every column except the photo: stats only need to know whether one exists,
+  // and loading them all (~175 KB each) slowed every dashboard visit.
+  const [wines, withPhoto] = await Promise.all([
+    prisma.wine.findMany({ where: { category }, select: WINE_WITHOUT_PHOTO }),
+    idsWithPhoto({ category }),
+  ]);
 
   // Get all consumption logs for wines in this category
   const wineIds = wines.map((w) => w.id);
@@ -250,7 +256,7 @@ export async function GET(req: NextRequest) {
       color: w.color,
       rating: log.rating ?? w.rating,
       onlineRating: w.onlineRating,
-      hasImage: !!w.imageData,
+      hasImage: withPhoto.has(w.id),
       labelImageUrl: w.labelImageUrl,
       region: w.region,
       country: w.country,
@@ -268,7 +274,7 @@ export async function GET(req: NextRequest) {
     color: w.color,
     rating: w.rating,
     onlineRating: w.onlineRating,
-    hasImage: !!w.imageData,
+    hasImage: withPhoto.has(w.id),
     labelImageUrl: w.labelImageUrl,
     region: w.region,
     country: w.country,
@@ -298,7 +304,7 @@ export async function GET(req: NextRequest) {
     priceRating, monthlyAdditions, monthlyConsumption, ratingDist, topWines, bestValue,
     uniqueVarietals, uniqueRegions, uniqueCountries,
     addedThisWeek, addedThisMonth, consumedThisMonth,
-    wineOfDay: wineOfDay ? { id: wineOfDay.id, name: wineOfDay.name, winery: wineOfDay.winery, rating: wineOfDay.rating, hasImage: !!wineOfDay.imageData, labelImageUrl: wineOfDay.labelImageUrl, color: wineOfDay.color, vintage: wineOfDay.vintage } : null,
+    wineOfDay: wineOfDay ? { id: wineOfDay.id, name: wineOfDay.name, winery: wineOfDay.winery, rating: wineOfDay.rating, hasImage: withPhoto.has(wineOfDay.id), labelImageUrl: wineOfDay.labelImageUrl, color: wineOfDay.color, vintage: wineOfDay.vintage } : null,
     onThisDay: onThisDay.map((w) => ({ id: w.id, name: w.name, winery: w.winery, createdAt: w.createdAt, rating: w.rating })),
     recentActivity,
   });
