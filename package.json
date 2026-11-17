@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push && next build",
+    "build": "prisma generate && node scripts/db-push.mjs && next build",
     "start": "next start",
     "postinstall": "prisma generate",
     "seed:receipt": "tsx --env-file=.env.local scripts/seed-receipt.ts"
