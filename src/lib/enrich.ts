@@ -1,7 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/db";
-
-const anthropic = new Anthropic();
+import { askForJson, askWithWebSearch, nullable, num, object, str } from "@/lib/claude";
 
 const ENRICH_PROMPTS: Record<string, (wine: Record<string, unknown>) => string> = {
   wine: (w) => `You are a master sommelier and wine expert. Research this wine and provide comprehensive details.
@@ -13,7 +11,7 @@ ${w.varietal ? `Varietal: ${w.varietal}` : ""}
 ${w.region ? `Region: ${w.region}` : ""}
 ${w.country ? `Country: ${w.country}` : ""}
 
-Return a JSON object with these fields (use null for anything you're not confident about):
+Fill in these fields (use null for anything you're not confident about):
 - description: 4-6 sentences about this wine — the winery's history and reputation, what makes this specific wine/vintage notable, terroir, and winemaking techniques
 - tastingNotes: detailed professional tasting note — describe appearance, aroma (primary, secondary, tertiary), palate (body, tannins, acidity, flavors), and finish. Be specific and evocative
 - drinkingWindow: recommended drinking window (e.g. "2024-2030" or "Drink now through 2026")
@@ -29,7 +27,7 @@ ${w.varietal ? `Origin: ${w.varietal}` : ""}
 ${w.region ? `Region: ${w.region}` : ""}
 ${w.country ? `Country: ${w.country}` : ""}
 
-Return a JSON object with these fields (use null for anything you're not confident about):
+Fill in these fields (use null for anything you're not confident about):
 - description: 4-6 sentences about this coffee — the roaster, origin, processing method, what makes it notable
 - tastingNotes: detailed cupping notes — describe aroma, flavor, aftertaste, acidity, body, balance, uniformity, and sweetness
 - drinkingWindow: freshness guidance (e.g. "Best within 4 weeks of roast date")
@@ -45,7 +43,7 @@ ${w.varietal ? `Style: ${w.varietal}` : ""}
 ${w.region ? `Region: ${w.region}` : ""}
 ${w.country ? `Country: ${w.country}` : ""}
 
-Return a JSON object with these fields (use null for anything you're not confident about):
+Fill in these fields (use null for anything you're not confident about):
 - description: 4-6 sentences about this beer — the brewery, what makes this beer notable, brewing style and ingredients
 - tastingNotes: detailed tasting profile — describe appearance, aroma, flavor, mouthfeel, bitterness (estimated IBU), and finish
 - drinkingWindow: freshness guidance (e.g. "Best fresh, within 90 days" or "Can cellar 2-5 years" for stouts/barleywines)
@@ -54,42 +52,50 @@ Return a JSON object with these fields (use null for anything you're not confide
 - onlineRating: estimated community rating on a 100-point scale`,
 };
 
-// Use web_search to find a stock image URL of the item's label/bottle
+const ENRICH_SCHEMA = object({
+  description: nullable(str),
+  tastingNotes: nullable(str),
+  drinkingWindow: nullable(str),
+  criticReviews: nullable(str),
+  foodPairings: nullable(str),
+  onlineRating: nullable(num),
+});
+
+interface EnrichResult {
+  description: string | null;
+  tastingNotes: string | null;
+  drinkingWindow: string | null;
+  criticReviews: string | null;
+  foodPairings: string | null;
+  onlineRating: number | null;
+}
+
+/** A 0-100 score, or null if the value is missing or out of range. */
+export function toScore(value: unknown): number | null {
+  const n = typeof value === "number" ? value : parseFloat(String(value));
+  return Number.isFinite(n) && n > 0 && n <= 100 ? n : null;
+}
+
+// Use web search to find a stock image URL of the item's label/bottle
 async function findLabelImageUrl(wine: Record<string, unknown>): Promise<string | null> {
   const query = [wine.winery, wine.name, wine.vintage].filter(Boolean).join(" ");
   if (!query) return null;
 
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1024,
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }],
-      messages: [
-        {
-          role: "user",
-          content: `Search the web for a clear photo of the bottle label for: "${query}".
+    const text = await askWithWebSearch({
+      prompt: `Search the web for a clear photo of the bottle label for: "${query}".
 
 Look on the producer's website, Wine-Searcher, Vivino, Wine.com, or other reliable wine sites. Find a direct image URL (ending in .jpg, .jpeg, .png, or .webp) showing the front of the bottle/label.
 
-Return ONLY a JSON object with a single field: {"imageUrl": "https://..."} — a direct image URL that an HTML <img> tag could use. If you cannot find a suitable image, return {"imageUrl": null}.
-
-Do not include any other text, explanation, or markdown code blocks.`,
-        },
-      ],
+End your answer with a JSON object with a single field: {"imageUrl": "https://..."} — a direct image URL that an HTML <img> tag could use. If you cannot find a suitable image, end with {"imageUrl": null}.`,
     });
 
-    // Find the last text block (final response after any tool use)
-    const textBlocks = message.content.filter((b) => b.type === "text");
-    const finalText = textBlocks[textBlocks.length - 1];
-    if (!finalText || finalText.type !== "text") return null;
-
-    // Extract JSON from response (may be wrapped in markdown)
-    const jsonMatch = finalText.text.match(/\{[^}]*"imageUrl"[^}]*\}/);
-    if (!jsonMatch) return null;
-
-    const parsed = JSON.parse(jsonMatch[0]);
+    // Take the last {"imageUrl": ...} object in the answer.
+    const matches = text.match(/\{[^{}]*"imageUrl"[^{}]*\}/g);
+    if (!matches) return null;
+    const parsed = JSON.parse(matches[matches.length - 1]);
     const url = parsed.imageUrl;
-    if (typeof url !== "string" || !url.startsWith("http")) return null;
+    if (typeof url !== "string" || !/^https?:\/\//.test(url)) return null;
     return url;
   } catch {
     return null;
@@ -97,7 +103,13 @@ Do not include any other text, explanation, or markdown code blocks.`,
 }
 
 export async function enrichWine(wineId: number): Promise<{ success: boolean; error?: string }> {
-  const wine = await prisma.wine.findUnique({ where: { id: wineId } });
+  const wine = await prisma.wine.findUnique({
+    where: { id: wineId },
+    select: {
+      name: true, winery: true, vintage: true, varietal: true, region: true,
+      country: true, category: true, labelImageUrl: true,
+    },
+  });
   if (!wine) return { success: false, error: "Not found" };
 
   const category = wine.category || "wine";
@@ -106,23 +118,11 @@ export async function enrichWine(wineId: number): Promise<{ success: boolean; er
 
   try {
     // Run enrichment + label image search in parallel
-    const [message, labelImageUrl] = await Promise.all([
-      anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 2048,
-        messages: [
-          {
-            role: "user",
-            content: `${prompt}\n\nReturn ONLY valid JSON, no markdown code blocks or other text.`,
-          },
-        ],
-      }),
+    const [parsed, labelImageUrl] = await Promise.all([
+      askForJson<EnrichResult>({ content: prompt, schema: ENRICH_SCHEMA }),
       // Only search for label image if missing
       wine.labelImageUrl ? Promise.resolve(null) : findLabelImageUrl(wine as unknown as Record<string, unknown>),
     ]);
-
-    const text = message.content[0].type === "text" ? message.content[0].text : "";
-    const parsed = JSON.parse(text);
 
     const data: Record<string, unknown> = {};
     if (parsed.description) data.description = parsed.description;
@@ -130,7 +130,8 @@ export async function enrichWine(wineId: number): Promise<{ success: boolean; er
     if (parsed.drinkingWindow) data.drinkingWindow = parsed.drinkingWindow;
     if (parsed.criticReviews) data.criticReviews = parsed.criticReviews;
     if (parsed.foodPairings) data.foodPairings = parsed.foodPairings;
-    if (parsed.onlineRating) data.onlineRating = parseFloat(parsed.onlineRating);
+    const score = toScore(parsed.onlineRating);
+    if (score !== null) data.onlineRating = score;
     if (labelImageUrl) data.labelImageUrl = labelImageUrl;
 
     await prisma.wine.update({ where: { id: wineId }, data });
@@ -142,7 +143,10 @@ export async function enrichWine(wineId: number): Promise<{ success: boolean; er
 
 // Manual trigger to refresh the label image for a wine
 export async function refreshLabelImage(wineId: number): Promise<string | null> {
-  const wine = await prisma.wine.findUnique({ where: { id: wineId } });
+  const wine = await prisma.wine.findUnique({
+    where: { id: wineId },
+    select: { name: true, winery: true, vintage: true },
+  });
   if (!wine) return null;
 
   const url = await findLabelImageUrl(wine as unknown as Record<string, unknown>);

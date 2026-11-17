@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCategory } from "@/lib/CategoryContext";
+import { resizeImages, UNREADABLE_PHOTO_MESSAGE } from "@/lib/resizeImage";
 
 interface ReceiptItem {
   name: string;
@@ -18,31 +19,8 @@ interface ReceiptItem {
 
 type Phase = "input" | "review" | "saving" | "done";
 
-function resizeImage(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") return;
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const maxSize = 1600; // receipts have small text, keep more detail than label photos
-        let { width, height } = img;
-        if (width > maxSize || height > maxSize) {
-          const ratio = Math.min(maxSize / width, maxSize / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        canvas.width = width;
-        canvas.height = height;
-        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.85));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
+// Receipts have small text, so keep more detail than label photos (1024px).
+const RECEIPT_MAX_SIZE = 1600;
 
 export default function ReceiptEntryPage() {
   const router = useRouter();
@@ -66,10 +44,11 @@ export default function ReceiptEntryPage() {
 
   const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    const resized = await Promise.all(files.map(resizeImage));
-    setPhotos((prev) => [...prev, ...resized]);
     e.target.value = "";
+    if (files.length === 0) return;
+    const { photos: resized, failed } = await resizeImages(files, RECEIPT_MAX_SIZE);
+    setPhotos((prev) => [...prev, ...resized]);
+    setError(failed > 0 ? `${failed} photo${failed !== 1 ? "s" : ""} ${UNREADABLE_PHOTO_MESSAGE}` : null);
   };
 
   const removePhoto = (idx: number) => setPhotos((prev) => prev.filter((_, i) => i !== idx));

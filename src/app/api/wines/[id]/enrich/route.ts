@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { hasApiKey } from "@/lib/claude";
 import { enrichWine } from "@/lib/enrich";
 import { prisma } from "@/lib/db";
+
+// Enrichment runs a Claude call and a web search, which outlast the default
+// function budget, so enrichment after a scan or receipt could time out.
+export const maxDuration = 60;
 
 export async function POST(
   _req: NextRequest,
@@ -9,7 +14,7 @@ export async function POST(
   const { id } = await params;
   const wineId = parseInt(id);
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!hasApiKey()) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 });
   }
 

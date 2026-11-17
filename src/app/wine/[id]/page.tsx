@@ -43,32 +43,56 @@ export default function WineDetail() {
   const [findingImage, setFindingImage] = useState(false);
   const [showConsume, setShowConsume] = useState(false);
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   useEffect(() => {
-    fetch(`/api/wines/${id}`).then((r) => r.json()).then((w) => {
-      setWine(w); setRating(w.rating || 0); setNotes(w.notes || ""); setQuantity(w.quantity || 1);
-    }).finally(() => setLoading(false));
+    fetch(`/api/wines/${id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((w) => {
+        if (!w) return;
+        setWine(w); setRating(w.rating || 0); setNotes(w.notes || ""); setQuantity(w.quantity ?? 1);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [id]);
+
+  // Send only the fields being changed — the server leaves everything else alone.
+  const update = async (fields: Record<string, unknown>): Promise<Wine | null> => {
+    setSaveError(null);
+    try {
+      const res = await fetch(`/api/wines/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fields),
+      });
+      if (!res.ok) throw new Error();
+      const updated: Wine = await res.json();
+      setWine(updated);
+      return updated;
+    } catch {
+      setSaveError("Couldn't save that change. Please try again.");
+      return null;
+    }
+  };
 
   const handleSave = async () => {
     if (!wine) return;
     setSaving(true);
-    const res = await fetch(`/api/wines/${id}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...wine, rating, notes, quantity }),
-    });
-    setWine(await res.json()); setEditing(false); setSaving(false);
+    if (await update({ rating, notes })) setEditing(false);
+    setSaving(false);
   };
 
   const adjustQuantity = async (delta: number) => {
+    const previous = quantity;
     const newQty = Math.max(0, quantity + delta);
     setQuantity(newQty);
-    await fetch(`/api/wines/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quantity: newQty }) });
+    const updated = await update({ quantity: newQty });
+    setQuantity(updated ? updated.quantity : previous);
   };
 
   const updateStatus = async (status: string) => {
     if (!wine) return;
-    await fetch(`/api/wines/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
-    setWine({ ...wine, status });
+    await update({ status });
   };
 
   const handleConsume = async (data: { rating?: number; notes?: string }) => {
@@ -220,6 +244,7 @@ export default function WineDetail() {
         {wine.store && <p className="text-[11px] text-text-muted mt-3">Purchased at <span className="text-text-tertiary">{wine.store.name}</span></p>}
         {wine.list && <p className="text-[11px] text-text-muted mt-1">List: <span className="text-text-tertiary">{wine.list.name}</span></p>}
         {wine.consumedAt && <p className="text-[11px] text-text-muted mt-2">Last opened {new Date(wine.consumedAt).toLocaleDateString()}</p>}
+        {saveError && <p className="text-[12px] text-danger mt-3">{saveError}</p>}
         {quantity > 0 && wine.status !== "consumed" && (
           <button onClick={() => setShowConsume(true)} className="mt-3 w-full bg-gold-muted hover:bg-gold/20 text-gold border border-gold/15 py-2 rounded-lg text-[12px] font-semibold transition-all">
             {config.consumeVerb}

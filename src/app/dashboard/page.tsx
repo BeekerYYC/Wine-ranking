@@ -36,6 +36,9 @@ interface Stats {
   avgRating: number;
   avgPrice: number;
   totalSpent: number;
+  cellarValue: number;
+  addedThisMonth: number;
+  consumedThisMonth: number;
   avgDaysBetween: number;
   uniqueVarietals: number;
   uniqueRegions: number;
@@ -44,6 +47,7 @@ interface Stats {
   colorBreakdown: { name: string; count: number }[];
   countryBreakdown: { name: string; count: number }[];
   monthlyAdditions: { month: string; count: number }[];
+  monthlyConsumption: { month: string; count: number }[];
   topWines: { id: number; name: string; winery: string; rating: number; vintage: number }[];
   recentActivity: Activity[];
 }
@@ -133,7 +137,6 @@ function formatRelativeTime(date: string): string {
 export default function Dashboard() {
   const { config } = useCategory();
   const [stats, setStats] = useState<Stats | null>(null);
-  const [period, setPeriod] = useState<"month" | "all">("month");
 
   useEffect(() => {
     setStats(null);
@@ -166,14 +169,15 @@ export default function Dashboard() {
 
   const taste = buildTasteProfile(stats.varietalBreakdown, stats.colorBreakdown);
   const insight = buildAiInsight(stats, taste);
-  const monthlyData = stats.monthlyAdditions?.slice(-6) || [];
+  // Bottles opened in each of the last 6 months (these charts used to plot bottles added)
+  const monthlyData = stats.monthlyConsumption?.slice(-6) || [];
   const topCountries = stats.countryBreakdown.slice(0, 5);
   const totalCountryCount = topCountries.reduce((s, c) => s + c.count, 0);
   const otherCount = stats.total - totalCountryCount;
   const pieData = otherCount > 0 ? [...topCountries, { name: "Others", count: otherCount }] : topCountries;
 
-  // Build a sparkline of avgDaysBetween from consumption logs - approximate from monthly
-  const paceSparkline = monthlyData.length > 0 ? monthlyData.map((m, i) => ({ x: i, y: m.count })) : [];
+  // Drinking pace: bottles opened per month
+  const paceSparkline = monthlyData.map((m, i) => ({ x: i, y: m.count }));
 
   return (
     <div className="space-y-5 pb-2">
@@ -196,20 +200,12 @@ export default function Dashboard() {
       <div className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-serif text-[18px] font-semibold">Overview</h2>
-          <select
-            value={period}
-            onChange={(e) => setPeriod(e.target.value as "month" | "all")}
-            className="bg-surface-overlay border border-border-subtle text-[12px] text-text-secondary rounded-lg px-2.5 py-1 focus:outline-none focus:border-gold/30 cursor-pointer"
-          >
-            <option value="month">This month</option>
-            <option value="all">All time</option>
-          </select>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <OverviewMetric icon={<IconBottle />} value={stats.inCollection} label="Wines in Cellar" delta={`+${monthlyData[monthlyData.length - 1]?.count || 0} this week`} />
-          <OverviewMetric icon={<IconWineGlass />} value={stats.consumedBottles ?? stats.consumed} label="Bottles Consumed" delta={`+${monthlyData[monthlyData.length - 1]?.count || 0} this month`} />
+          <OverviewMetric icon={<IconBottle />} value={stats.inCollection} label="Bottles in Cellar" delta={`+${stats.addedThisMonth} added this month`} />
+          <OverviewMetric icon={<IconWineGlass />} value={stats.consumedBottles ?? stats.consumed} label="Bottles Consumed" delta={`+${stats.consumedThisMonth} this month`} />
           <OverviewMetric icon={<IconGrape />} value={stats.uniqueRegions} label="Regions" delta={stats.uniqueCountries > 0 ? `${stats.uniqueCountries} countries` : ""} />
-          <OverviewMetric icon={<IconTag />} value={`$${stats.totalSpent.toLocaleString()}`} label="Est. Collection Value" delta={`Avg $${Math.round(stats.avgPrice)}`} />
+          <OverviewMetric icon={<IconTag />} value={`$${Math.round(stats.cellarValue).toLocaleString()}`} label="Cellar Value" delta={`$${Math.round(stats.totalSpent).toLocaleString()} spent all-time`} />
         </div>
       </div>
 
@@ -220,7 +216,7 @@ export default function Dashboard() {
             <h3 className="font-serif text-[15px] font-semibold">Consumption Over Time</h3>
             <span className="text-[10px] text-text-muted px-2 py-0.5 rounded bg-surface-overlay">6M</span>
           </div>
-          {monthlyData.length > 0 ? (
+          {monthlyData.some((m) => m.count > 0) ? (
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={monthlyData}>
                 <XAxis
@@ -248,7 +244,7 @@ export default function Dashboard() {
         </div>
 
         <div className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
-          <h3 className="font-serif text-[15px] font-semibold mb-3">Top Regions</h3>
+          <h3 className="font-serif text-[15px] font-semibold mb-3">Top Countries</h3>
           <div className="flex items-center gap-3">
             <ResponsiveContainer width={130} height={130}>
               <PieChart>
@@ -325,7 +321,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex-1 h-12">
-            {paceSparkline.length > 1 && (
+            {paceSparkline.some((p) => p.y > 0) && (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={paceSparkline}>
                   <Line type="monotone" dataKey="y" stroke="#e0617e" strokeWidth={2} dot={false} />

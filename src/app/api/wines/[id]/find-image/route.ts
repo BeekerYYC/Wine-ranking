@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { hasApiKey } from "@/lib/claude";
 import { prisma } from "@/lib/db";
 import { refreshLabelImage } from "@/lib/enrich";
+
+// The label search uses Claude with web search, which outlasts the default budget.
+export const maxDuration = 60;
 
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!hasApiKey()) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 });
   }
 

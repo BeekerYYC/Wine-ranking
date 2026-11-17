@@ -100,6 +100,39 @@ export async function GET(req: NextRequest) {
     .map(([month, count]) => ({ month, count }))
     .sort((a, b) => a.month.localeCompare(b.month));
 
+  // The last 12 months, oldest first, so charts show quiet months as zero
+  // instead of skipping them.
+  const now = new Date();
+  const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const lastMonths: string[] = [];
+  for (let i = 11; i >= 0; i--) {
+    lastMonths.push(monthKey(new Date(now.getFullYear(), now.getMonth() - i, 1)));
+  }
+  const thisMonth = lastMonths[lastMonths.length - 1];
+
+  // Bottles opened per month: one per consumption log. Wines opened before
+  // logging existed have no logs, so they count once, in the month of consumedAt.
+  const consumedByMonth: Record<string, number> = {};
+  const winesWithLogs = new Set(consumptionLogs.map((l) => l.wineId));
+  consumptionLogs.forEach((l) => {
+    const key = monthKey(new Date(l.createdAt));
+    consumedByMonth[key] = (consumedByMonth[key] || 0) + 1;
+  });
+  wines.forEach((w) => {
+    if (w.consumedAt && !winesWithLogs.has(w.id)) {
+      const key = monthKey(new Date(w.consumedAt));
+      consumedByMonth[key] = (consumedByMonth[key] || 0) + 1;
+    }
+  });
+  const monthlyConsumption = lastMonths.map((month) => ({ month, count: consumedByMonth[month] || 0 }));
+  const consumedThisMonth = consumedByMonth[thisMonth] || 0;
+  const addedThisMonth = monthlyMap[thisMonth] || 0;
+
+  // What the bottles still in the cellar cost (totalSpent also counts ones already drunk).
+  const cellarValue = wines
+    .filter((w) => w.status === "collection" && w.price)
+    .reduce((sum, w) => sum + (w.price || 0) * w.quantity, 0);
+
   const ratingDist = [1, 2, 3, 4, 5].map((r) => ({
     rating: r,
     count: wines.filter((w) => w.rating === r).length,
@@ -201,9 +234,11 @@ export async function GET(req: NextRequest) {
     avgRating: Math.round(avgRating * 10) / 10,
     avgPrice: Math.round(avgPrice * 100) / 100,
     totalSpent: Math.round(totalSpent * 100) / 100,
+    cellarValue: Math.round(cellarValue * 100) / 100,
     avgDaysBetween: Math.round(avgDaysBetween * 10) / 10,
     varietalBreakdown, colorBreakdown, countryBreakdown,
-    priceRating, monthlyAdditions, ratingDist, topWines, bestValue,
+    priceRating, monthlyAdditions, monthlyConsumption, addedThisMonth, consumedThisMonth,
+    ratingDist, topWines, bestValue,
     uniqueVarietals, uniqueRegions, uniqueCountries,
     wineOfDay: wineOfDay ? { id: wineOfDay.id, name: wineOfDay.name, winery: wineOfDay.winery, rating: wineOfDay.rating, hasImage: !!wineOfDay.imageData, labelImageUrl: wineOfDay.labelImageUrl, color: wineOfDay.color, vintage: wineOfDay.vintage } : null,
     onThisDay: onThisDay.map((w) => ({ id: w.id, name: w.name, winery: w.winery, createdAt: w.createdAt, rating: w.rating })),

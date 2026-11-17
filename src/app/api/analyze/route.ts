@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { askForJson, hasApiKey, imageBlock, int, nullable, num, object, oneOf, str } from "@/lib/claude";
+import { CATEGORIES, Category } from "@/lib/categories";
+import { toScore } from "@/lib/enrich";
 
-const anthropic = new Anthropic();
+// Reading a label with Claude takes longer than the default function budget.
+export const maxDuration = 60;
 
 const PROMPTS: Record<string, string> = {
   wine: `You are a master sommelier and wine expert. Identify this wine from the label and provide COMPREHENSIVE details using your full knowledge of wine, including critic reviews and online rankings.
 
-Return a JSON object with these fields. Be thorough — pull every detail you know about this specific wine and vintage:
+Fill in these fields. Be thorough — pull every detail you know about this specific wine and vintage:
 
 - name: the wine name
 - winery: the producer/winery name
@@ -25,7 +28,7 @@ Return a JSON object with these fields. Be thorough — pull every detail you kn
 
   coffee: `Analyze this coffee bag/label image. Identify the coffee and use your knowledge to provide comprehensive details.
 
-Extract and return a JSON object with these fields:
+Fill in these fields:
 - name: the coffee name
 - winery: the roaster name
 - vintage: roast date if visible (as year number or null)
@@ -43,7 +46,7 @@ Extract and return a JSON object with these fields:
 
   beer: `Analyze this beer can/bottle/label image. Identify the beer and use your knowledge to provide comprehensive details.
 
-Extract and return a JSON object with these fields:
+Fill in these fields:
 - name: the beer name
 - winery: the brewery name
 - vintage: brew date if visible (as year number or null)
@@ -60,42 +63,48 @@ Extract and return a JSON object with these fields:
 - confidence: how confident you are in this identification, 0.0 to 1.0`,
 };
 
+function analyzeSchema(category: Category) {
+  return object({
+    name: str,
+    winery: nullable(str),
+    vintage: nullable(int),
+    varietal: nullable(str),
+    region: nullable(str),
+    country: nullable(str),
+    color: nullable(oneOf(CATEGORIES[category].types.map((t) => t.value))),
+    description: nullable(str),
+    tastingNotes: nullable(str),
+    drinkingWindow: nullable(str),
+    criticReviews: nullable(str),
+    foodPairings: nullable(str),
+    onlineRating: nullable(num),
+    confidence: num,
+  });
+}
+
 export async function POST(req: NextRequest) {
-  const { imageData, category = "wine" } = await req.json();
+  const { imageData, category: rawCategory = "wine" } = await req.json();
+  const category: Category = rawCategory in CATEGORIES ? rawCategory : "wine";
 
   if (!imageData) {
     return NextResponse.json({ error: "No image provided" }, { status: 400 });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!hasApiKey()) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 });
   }
 
-  const base64 = imageData.replace(/^data:image\/\w+;base64,/, "");
-  const mediaType = imageData.startsWith("data:image/png") ? "image/png" : "image/jpeg";
-
-  const prompt = PROMPTS[category] || PROMPTS.wine;
-
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 3072,
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-          { type: "text", text: `${prompt}\n\nReturn ONLY valid JSON, no markdown code blocks or other text.` },
-        ],
-      },
-    ],
-  });
-
-  const text = message.content[0].type === "text" ? message.content[0].text : "";
-
   try {
-    const parsed = JSON.parse(text);
-    return NextResponse.json(parsed);
-  } catch {
-    return NextResponse.json({ error: "Failed to parse AI response", raw: text }, { status: 500 });
+    const info = await askForJson<Record<string, unknown>>({
+      content: [imageBlock(imageData), { type: "text", text: PROMPTS[category] }],
+      schema: analyzeSchema(category),
+    });
+    const confidence = typeof info.confidence === "number" ? Math.min(1, Math.max(0, info.confidence)) : null;
+    return NextResponse.json({ ...info, onlineRating: toScore(info.onlineRating), confidence });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Could not analyze the label" },
+      { status: 502 }
+    );
   }
 }

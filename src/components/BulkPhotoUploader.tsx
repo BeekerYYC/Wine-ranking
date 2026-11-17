@@ -2,51 +2,32 @@
 
 import { useRef, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
-
-function resizeImage(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") return;
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const maxSize = 1024;
-        let { width, height } = img;
-        if (width > maxSize || height > maxSize) {
-          const ratio = Math.min(maxSize / width, maxSize / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        canvas.width = width;
-        canvas.height = height;
-        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.85));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
+import { resizeImages, UNREADABLE_PHOTO_MESSAGE } from "@/lib/resizeImage";
 
 export default function BulkPhotoUploader({
   onPhotosReady,
   disabled,
+  initialPhotos = [],
 }: {
   onPhotosReady: (photos: string[]) => void;
   disabled?: boolean;
+  /** Photos to start with, e.g. handed back after a scan failed. */
+  initialPhotos?: string[];
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { config } = useCategory();
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<string[]>(initialPhotos);
   const [processing, setProcessing] = useState(false);
+  const [unreadable, setUnreadable] = useState(0);
 
   const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
+    e.target.value = ""; // so picking the same photo again still triggers a change
     if (files.length === 0) return;
     setProcessing(true);
-    const resized = await Promise.all(files.map(resizeImage));
+    const { photos: resized, failed } = await resizeImages(files);
     setPhotos((prev) => [...prev, ...resized]);
+    setUnreadable(failed);
     setProcessing(false);
   };
 
@@ -109,6 +90,12 @@ export default function BulkPhotoUploader({
 
       {processing && (
         <p className="text-[12px] text-text-tertiary text-center mt-2">Preparing photos...</p>
+      )}
+
+      {unreadable > 0 && !processing && (
+        <p className="text-[12px] text-danger text-center mt-2 mb-3">
+          {unreadable} photo{unreadable !== 1 ? "s" : ""} {UNREADABLE_PHOTO_MESSAGE}
+        </p>
       )}
 
       {photos.length > 0 && (

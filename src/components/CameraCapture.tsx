@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
+import { resizeImage, UNREADABLE_PHOTO_MESSAGE } from "@/lib/resizeImage";
 
 export default function CameraCapture({
   onCapture,
@@ -10,33 +11,18 @@ export default function CameraCapture({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { config } = useCategory();
+  const [error, setError] = useState<string | null>(null);
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // so picking the same photo again still triggers a change
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          const maxSize = 1024;
-          let { width, height } = img;
-          if (width > maxSize || height > maxSize) {
-            const ratio = Math.min(maxSize / width, maxSize / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-          }
-          canvas.width = width;
-          canvas.height = height;
-          canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
-          onCapture(canvas.toDataURL("image/jpeg", 0.85));
-        };
-        img.src = reader.result;
-      }
-    };
-    reader.readAsDataURL(file);
+    setError(null);
+    try {
+      onCapture(await resizeImage(file));
+    } catch {
+      setError(`That photo ${UNREADABLE_PHOTO_MESSAGE}`);
+    }
   };
 
   return (
@@ -67,6 +53,7 @@ export default function CameraCapture({
           Take a photo or choose from gallery
         </p>
       </button>
+      {error && <p className="text-[12px] text-danger text-center mt-2">{error}</p>}
     </div>
   );
 }

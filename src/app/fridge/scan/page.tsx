@@ -7,6 +7,25 @@ import { useCategory } from "@/lib/CategoryContext";
 
 type Stage = "upload" | "processing" | "done";
 
+interface ProcessResponse {
+  done?: boolean;
+  error?: string;
+  batch?: { processed: number; totalPhotos: number; items: { status: string }[] };
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** POST and parse JSON; null when the request or the JSON fails (e.g. a gateway timeout page). */
+async function postJson(url: string): Promise<{ ok: boolean; data: ProcessResponse | null }> {
+  try {
+    const res = await fetch(url, { method: "POST" });
+    const data = await res.json().catch(() => null);
+    return { ok: res.ok, data };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
 export default function ScanPage() {
   const router = useRouter();
   const { category, config } = useCategory();
@@ -14,45 +33,89 @@ export default function ScanPage() {
   const [batchId, setBatchId] = useState<number | null>(null);
   const [progress, setProgress] = useState({ processed: 0, total: 0 });
   const [itemsFound, setItemsFound] = useState(0);
+  const [unreadPhotos, setUnreadPhotos] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  // Kept so a failed scan returns to the upload screen with the photos still there.
+  const [photos, setPhotos] = useState<string[]>([]);
 
-  const startScan = async (photos: string[]) => {
+  const startScan = async (selected: string[]) => {
+    setPhotos(selected);
     setStage("processing");
-    setProgress({ processed: 0, total: photos.length });
+    setProgress({ processed: 0, total: selected.length });
+    setItemsFound(0);
+    setUnreadPhotos(0);
     setError(null);
 
+    const backToUpload = (message: string) => {
+      setError(message);
+      setStage("upload");
+    };
+
+    let id: number;
     try {
       const batchRes = await fetch("/api/scan/batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photos, category }),
+        body: JSON.stringify({ photos: selected, category }),
       });
-      const { id } = await batchRes.json();
+      if (batchRes.status === 413) {
+        return backToUpload("That's too many photos to upload at once. Try scanning about 20 at a time.");
+      }
+      const data = await batchRes.json().catch(() => null);
+      if (!batchRes.ok || typeof data?.id !== "number") {
+        return backToUpload(data?.error || `Couldn't start the scan (HTTP ${batchRes.status}). Your photos are still here — try again.`);
+      }
+      id = data.id;
       setBatchId(id);
+    } catch {
+      return backToUpload("Couldn't reach the server. Your photos are still here — try again.");
+    }
 
-      let done = false;
-      while (!done) {
-        const res = await fetch(`/api/scan/batch/${id}/process`, { method: "POST" });
-        const data = await res.json();
+    // Analyze one photo per request until the server says it's done. A photo
+    // whose request keeps failing (e.g. timing out) is retried twice, then
+    // skipped, so one bad photo can't stall or abort the whole scan. The cap
+    // makes an endless loop impossible whatever the server returns.
+    let found = 0;
+    let unread = 0;
+    let failuresInARow = 0;
+    const maxRequests = selected.length * 4 + 10;
 
-        if (data.error) {
-          console.warn("Photo processing error:", data.error);
-        }
+    for (let i = 0; i < maxRequests; i++) {
+      const skip = failuresInARow >= 3;
+      const { ok, data } = await postJson(`/api/scan/batch/${id}/process${skip ? "?skip=1" : ""}`);
 
+      if (ok && data && typeof data.done === "boolean") {
+        failuresInARow = 0;
+        if (skip || data.error) unread++;
         if (data.batch) {
-          const analyzed = data.batch.items.filter((i: { status: string }) => i.status === "analyzed").length;
-          setItemsFound(analyzed);
+          found = data.batch.items.filter((it) => it.status === "analyzed").length;
+          setItemsFound(found);
           setProgress({ processed: data.batch.processed, total: data.batch.totalPhotos });
         }
-
-        done = data.done;
+        setUnreadPhotos(unread);
+        if (data.done) break;
+        continue;
       }
 
-      setStage("done");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Scan failed");
-      setStage("upload");
+      // Our own error (e.g. the API key isn't configured) won't fix itself on retry.
+      if (!ok && data?.error && !skip) {
+        if (found > 0) {
+          setError(`${data.error}. Review what was found so far.`);
+          setStage("done");
+        } else {
+          backToUpload(data.error);
+        }
+        return;
+      }
+
+      failuresInARow++;
+      await sleep(1500 * Math.min(failuresInARow, 3));
     }
+
+    if (found === 0) {
+      return backToUpload(`No ${config.itemNamePlural} could be identified in these photos. Your photos are still here — try again or use clearer shots.`);
+    }
+    setStage("done");
   };
 
   return (
@@ -79,14 +142,14 @@ export default function ScanPage() {
         </div>
       )}
 
-      {stage === "upload" && <BulkPhotoUploader onPhotosReady={startScan} />}
+      {stage === "upload" && <BulkPhotoUploader onPhotosReady={startScan} initialPhotos={photos} />}
 
       {stage === "processing" && (
         <div className="space-y-5">
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[13px] text-text-primary font-medium">
-                Analyzing photo {progress.processed + 1} of {progress.total}...
+                Analyzing photo {Math.min(progress.processed + 1, progress.total)} of {progress.total}...
               </span>
               <span className="text-[12px] text-gold tabular-nums">{Math.round((progress.processed / progress.total) * 100)}%</span>
             </div>
@@ -128,6 +191,11 @@ export default function ScanPage() {
             Found {itemsFound} item{itemsFound !== 1 ? "s" : ""}!
           </h2>
           <p className="text-[13px] text-text-tertiary mb-6">Review and confirm each item to add to your {config.fridgeLabel.toLowerCase()}</p>
+          {unreadPhotos > 0 && (
+            <p className="text-[12px] text-text-muted -mt-4 mb-6">
+              {unreadPhotos} photo{unreadPhotos !== 1 ? "s" : ""} couldn&apos;t be read and {unreadPhotos !== 1 ? "were" : "was"} skipped.
+            </p>
+          )}
           <button
             onClick={() => router.push(`/fridge/scan/${batchId}/review`)}
             className="bg-gold/90 hover:bg-gold text-bg px-6 py-3 rounded-lg text-[14px] font-semibold transition-colors"
