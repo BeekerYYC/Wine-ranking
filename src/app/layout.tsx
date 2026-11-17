@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import { CategoryProvider } from "@/lib/CategoryContext";
+import { DrinkFlowProvider } from "@/components/DrinkFlow";
 
 export const metadata: Metadata = {
   title: "Wine Ranker",
@@ -60,12 +61,14 @@ export default function RootLayout({
       </head>
       <body className="bg-bg text-text-primary min-h-screen font-sans">
         <CategoryProvider>
-          <Sidebar />
-          <main className="md:ml-[220px] min-h-screen pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-0">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-              {children}
-            </div>
-          </main>
+          <DrinkFlowProvider>
+            <Sidebar />
+            <main className="md:ml-[220px] min-h-screen pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+                {children}
+              </div>
+            </main>
+          </DrinkFlowProvider>
         </CategoryProvider>
       </body>
     </html>
