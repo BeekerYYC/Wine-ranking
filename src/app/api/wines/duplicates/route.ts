@@ -11,7 +11,7 @@ interface DbWine {
   quantity: number;
   rating: number | null;
   notes: string | null;
-  imageData: string | null;
+  hasPhoto: boolean;
   labelImageUrl: string | null;
   createdAt: Date;
 }
@@ -112,7 +112,7 @@ function richnessScore(w: DbWine): number {
   let s = 0;
   if (w.rating) s += 4;
   if (w.notes && w.notes.trim().length > 0) s += 3;
-  if (w.imageData) s += 2;
+  if (w.hasPhoto) s += 2;
   if (w.labelImageUrl) s += 1;
   return s;
 }
@@ -132,14 +132,24 @@ export async function GET(req: NextRequest) {
   const category = req.nextUrl.searchParams.get("category") || "wine";
   const status = req.nextUrl.searchParams.get("status") || "collection";
 
-  const wines = await prisma.wine.findMany({
-    where: { category, status },
-    select: {
-      id: true, name: true, winery: true, vintage: true, varietal: true,
-      color: true, quantity: true, rating: true, notes: true,
-      imageData: true, labelImageUrl: true, createdAt: true,
-    },
-  });
+  // Only whether each wine has a photo matters here, so don't load the photos
+  // themselves (~175 KB each) — that made this slower with every bottle added.
+  const [rows, withPhoto] = await Promise.all([
+    prisma.wine.findMany({
+      where: { category, status },
+      select: {
+        id: true, name: true, winery: true, vintage: true, varietal: true,
+        color: true, quantity: true, rating: true, notes: true,
+        labelImageUrl: true, createdAt: true,
+      },
+    }),
+    prisma.wine.findMany({
+      where: { category, status, imageData: { not: null } },
+      select: { id: true },
+    }),
+  ]);
+  const hasPhoto = new Set(withPhoto.map((w) => w.id));
+  const wines: DbWine[] = rows.map((w) => ({ ...w, hasPhoto: hasPhoto.has(w.id) }));
 
   const THRESHOLD = 50; // higher = stricter
   const dsu = new DSU(wines.length);
@@ -177,7 +187,7 @@ export async function GET(req: NextRequest) {
           quantity: w.quantity,
           rating: w.rating,
           hasNotes: !!(w.notes && w.notes.trim().length > 0),
-          hasImage: !!(w.imageData || w.labelImageUrl),
+          hasImage: w.hasPhoto || !!w.labelImageUrl,
           createdAt: w.createdAt,
         })),
       };
