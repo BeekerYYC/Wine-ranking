@@ -134,6 +134,7 @@ export default function WineDetail() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Lookup failed (HTTP ${res.status})`);
       setWine((w) => (w ? { ...w, ...data.wine } : w));
+      if (data.kept) setPriceError("No new listing found — kept the previous price.");
     } catch (e) {
       setPriceError(e instanceof Error ? e.message : "Could not fetch a price");
     } finally {

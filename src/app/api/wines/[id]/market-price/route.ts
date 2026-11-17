@@ -20,6 +20,20 @@ export async function POST(
   if (!wine) return NextResponse.json({ error: "Wine not found" }, { status: 404 });
 
   const market = await findMarketPrice(wine);
+  if (!market && wine.marketPrice != null) {
+    // A failed refresh must not touch an existing price — including its note and
+    // date. Overwriting those left the page showing a price next to "No credible
+    // retail listing found", checked today: a contradiction about a number that
+    // was never re-checked.
+    return NextResponse.json({
+      ok: false,
+      kept: true,
+      wine: {
+        id: wine.id, name: wine.name, marketPrice: wine.marketPrice, marketCurrency: wine.marketCurrency,
+        marketPriceNote: wine.marketPriceNote, marketPriceAt: wine.marketPriceAt,
+      },
+    });
+  }
   if (!market) {
     // Record that the lookup happened. Without this, a wine the search found no
     // listing for was indistinguishable from one never looked up, and the page
