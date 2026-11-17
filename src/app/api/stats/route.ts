@@ -126,6 +126,30 @@ export async function GET(req: NextRequest) {
     .map(([month, count]) => ({ month, count }))
     .sort((a, b) => a.month.localeCompare(b.month));
 
+  // Bottles opened per month for the last 12 months, oldest first, with quiet
+  // months as zero. The "Consumption Over Time" charts used to plot
+  // monthlyAdditions — bottles added, not drunk. One bottle per consumption log;
+  // wines opened before logging existed have no logs, so they count once, in
+  // the month of consumedAt.
+  const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const currentDate = new Date();
+  const consumedByMonth: Record<string, number> = {};
+  const winesWithLogs = new Set(consumptionLogs.map((l) => l.wineId));
+  consumptionLogs.forEach((l) => {
+    const key = monthKey(new Date(l.createdAt));
+    consumedByMonth[key] = (consumedByMonth[key] || 0) + 1;
+  });
+  wines.forEach((w) => {
+    if (w.consumedAt && !winesWithLogs.has(w.id)) {
+      const key = monthKey(new Date(w.consumedAt));
+      consumedByMonth[key] = (consumedByMonth[key] || 0) + 1;
+    }
+  });
+  const monthlyConsumption = Array.from({ length: 12 }, (_, i) => {
+    const month = monthKey(new Date(currentDate.getFullYear(), currentDate.getMonth() - 11 + i, 1));
+    return { month, count: consumedByMonth[month] || 0 };
+  });
+
   // Time-windowed counts for dashboard deltas
   const now = Date.now();
   const weekMs = 7 * 24 * 60 * 60 * 1000;
@@ -271,7 +295,7 @@ export async function GET(req: NextRequest) {
     month,
     avgDaysBetween: Math.round(avgDaysBetween * 10) / 10,
     varietalBreakdown, colorBreakdown, countryBreakdown,
-    priceRating, monthlyAdditions, ratingDist, topWines, bestValue,
+    priceRating, monthlyAdditions, monthlyConsumption, ratingDist, topWines, bestValue,
     uniqueVarietals, uniqueRegions, uniqueCountries,
     addedThisWeek, addedThisMonth, consumedThisMonth,
     wineOfDay: wineOfDay ? { id: wineOfDay.id, name: wineOfDay.name, winery: wineOfDay.winery, rating: wineOfDay.rating, hasImage: !!wineOfDay.imageData, labelImageUrl: wineOfDay.labelImageUrl, color: wineOfDay.color, vintage: wineOfDay.vintage } : null,

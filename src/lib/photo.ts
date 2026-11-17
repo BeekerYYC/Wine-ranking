@@ -1,3 +1,5 @@
+import { Box, cropRegion } from "@/lib/box";
+
 /**
  * Downscale a photo to a JPEG data URL small enough to upload.
  *
@@ -111,6 +113,31 @@ function viaImageElement(file: File, maxSize: number, quality: number): Promise<
       img.src = reader.result;
     };
     reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Crop a photo (data URL) to the bottle in `box`, in the browser. Resolves to
+ * null when cropping isn't possible or wouldn't help, so callers can fall back
+ * to the full photo. The server-side equivalent is cropToBox() in lib/crop.ts.
+ */
+export function cropPhoto(dataUrl: string, box: Box, maxSize = 800, quality = 0.85): Promise<string | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onerror = () => resolve(null);
+    img.onload = () => {
+      const region = cropRegion(box, img.naturalWidth, img.naturalHeight);
+      if (!region) return resolve(null);
+      const scale = Math.min(1, maxSize / Math.max(region.width, region.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(region.width * scale);
+      canvas.height = Math.round(region.height * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return resolve(null);
+      ctx.drawImage(img, region.left, region.top, region.width, region.height, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.src = dataUrl;
   });
 }
 

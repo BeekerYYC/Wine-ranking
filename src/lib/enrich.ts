@@ -1,8 +1,15 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/db";
+import { askForJson, askWithWebSearch, nullable, num, object, str, toScore } from "@/lib/claude";
 import { findMarketPrice } from "@/lib/marketPrice";
 
-const anthropic = new Anthropic();
+const ENRICH_SCHEMA = object({
+  description: nullable(str),
+  tastingNotes: nullable(str),
+  drinkingWindow: nullable(str),
+  criticReviews: nullable(str),
+  foodPairings: nullable(str),
+  onlineRating: nullable(num),
+});
 
 const ENRICH_PROMPTS: Record<string, (wine: Record<string, unknown>) => string> = {
   wine: (w) => `You are a master sommelier and wine expert. Research this wine and provide comprehensive details.
@@ -89,14 +96,9 @@ async function findLabelImageUrl(wine: Record<string, unknown>): Promise<string 
   if (!query) return null;
 
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2048,
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
-      messages: [
-        {
-          role: "user",
-          content: `Find 3-5 candidate image URLs of the bottle/label for: "${query}".
+    const text = await askWithWebSearch({
+      maxUses: 3,
+      prompt: `Find 3-5 candidate image URLs of the bottle/label for: "${query}".
 
 Search reliable sources that allow direct image hotlinking. Strongly prefer, in this order:
 1. The producer's own website (e.g. domain matches the winery name)
@@ -109,25 +111,20 @@ AVOID these because they hotlink-block or rotate URLs:
 - pinimg.com (Pinterest)
 - Bing/Google image-search redirect URLs (urls containing /th?, /imgres?, /url?)
 
-Each candidate must be a direct image URL (path typically ends with .jpg/.jpeg/.png/.webp, or the CDN serves an image MIME type). Return JSON in exactly this shape, ordered best-first:
+Each candidate must be a direct image URL (path typically ends with .jpg/.jpeg/.png/.webp, or the CDN serves an image MIME type). End your answer with JSON in exactly this shape, ordered best-first:
 
 {"candidates": ["https://...", "https://...", ...]}
 
-If you cannot find any usable image, return {"candidates": []}. No prose, no markdown code blocks.`,
-        },
-      ],
+If you cannot find any usable image, end with {"candidates": []}.`,
     });
 
-    const textBlocks = message.content.filter((b) => b.type === "text");
-    const finalText = textBlocks[textBlocks.length - 1];
-    if (!finalText || finalText.type !== "text") return null;
-
-    const jsonMatch = finalText.text.match(/\{[\s\S]*?"candidates"[\s\S]*?\}/);
-    if (!jsonMatch) return null;
+    // The answer is the last {"candidates": [...]} object; earlier text narrates the search.
+    const matches = text.match(/\{[^{}]*"candidates"[^{}]*\}/g);
+    if (!matches) return null;
 
     let parsed: { candidates?: unknown };
     try {
-      parsed = JSON.parse(jsonMatch[0]);
+      parsed = JSON.parse(matches[matches.length - 1]);
     } catch {
       return null;
     }
@@ -145,32 +142,13 @@ If you cannot find any usable image, return {"candidates": []}. No prose, no mar
   }
 }
 
-/**
- * Parse the enrichment reply.
- *
- * "Return ONLY valid JSON" is a request, not a guarantee: the model wraps the
- * object in a ```json fence often enough that a bare JSON.parse made enrichment
- * fail at random. That failure was invisible — enrichWine swallows its own
- * errors — so bottles simply arrived with no tasting notes and the user had to
- * hit "enrich" by hand, which succeeded whenever the next reply came back
- * unfenced. The scan route has always stripped fences; this one never did.
- */
-function parseEnrichmentJson(raw: string): Record<string, unknown> {
-  const cleaned = raw
-    .replace(/^\s*```(?:json)?\s*/i, "")
-    .replace(/\s*```\s*$/, "")
-    .trim();
-
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    // Last resort: the outermost object anywhere in the reply, in case the model
-    // wrapped it in prose as well.
-    const start = cleaned.indexOf("{");
-    const end = cleaned.lastIndexOf("}");
-    if (start === -1 || end <= start) throw new Error("no JSON object in enrichment reply");
-    return JSON.parse(cleaned.slice(start, end + 1));
-  }
+interface EnrichResult {
+  description: string | null;
+  tastingNotes: string | null;
+  drinkingWindow: string | null;
+  criticReviews: string | null;
+  foodPairings: string | null;
+  onlineRating: number | null;
 }
 
 export async function enrichWine(wineId: number): Promise<{ success: boolean; error?: string }> {
@@ -184,26 +162,14 @@ export async function enrichWine(wineId: number): Promise<{ success: boolean; er
   try {
     // Run enrichment, the label image search and the market price lookup in
     // parallel — all three are independent web/LLM calls.
-    const [message, labelImageUrl, market] = await Promise.all([
-      anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 2048,
-        messages: [
-          {
-            role: "user",
-            content: `${prompt}\n\nReturn ONLY valid JSON, no markdown code blocks or other text.`,
-          },
-        ],
-      }),
+    // Structured output guarantees the enrichment reply parses. Fence-stripping
+    // used to stand in for that, and a reply it couldn't clean failed silently.
+    const [parsed, labelImageUrl, market] = await Promise.all([
+      askForJson<EnrichResult>({ content: prompt, schema: ENRICH_SCHEMA }),
       // Only search for label image if missing
       wine.labelImageUrl ? Promise.resolve(null) : findLabelImageUrl(wine as unknown as Record<string, unknown>),
       findMarketPrice(wine),
     ]);
-
-    // Take the first text block rather than assuming content[0] is one.
-    const textBlock = message.content.find((b) => b.type === "text");
-    const text = textBlock && textBlock.type === "text" ? textBlock.text : "";
-    const parsed = parseEnrichmentJson(text);
 
     const data: Record<string, unknown> = {};
     if (parsed.description) data.description = parsed.description;
@@ -211,7 +177,8 @@ export async function enrichWine(wineId: number): Promise<{ success: boolean; er
     if (parsed.drinkingWindow) data.drinkingWindow = parsed.drinkingWindow;
     if (parsed.criticReviews) data.criticReviews = parsed.criticReviews;
     if (parsed.foodPairings) data.foodPairings = parsed.foodPairings;
-    if (parsed.onlineRating) data.onlineRating = parseFloat(String(parsed.onlineRating));
+    const score = toScore(parsed.onlineRating);
+    if (score !== null) data.onlineRating = score;
     if (labelImageUrl) data.labelImageUrl = labelImageUrl;
     if (market) {
       data.marketPrice = market.price;

@@ -1,6 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic();
+import { askWithWebSearch } from "@/lib/claude";
 
 export interface MarketPrice {
   price: number;
@@ -34,42 +32,31 @@ export async function findMarketPrice(wine: {
   if (!descriptor.trim()) return null;
 
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1024,
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
-      messages: [
-        {
-          role: "user",
-          content: `Find the current market price for one 750ml bottle of: "${descriptor}".
+    const text = await askWithWebSearch({
+      maxUses: 3,
+      prompt: `Find the current market price for one 750ml bottle of: "${descriptor}".
 
 Search retailer listings and price aggregators (Wine-Searcher, Vivino, wine.com, LCBO, Canadian retailers). Report a typical current price per bottle, not a case price, not a sale or clearance price, and not an auction hammer price.
 
 Prefer a price in CAD (the collection is in Canada). If you only find another currency, report that currency rather than converting.
 
-Return ONLY a JSON object:
+End your answer with a JSON object:
 {"price": 24.99, "currency": "CAD", "note": "avg of 3 Canadian retailer listings"}
 
 - price: a number, the per-bottle price
 - currency: ISO code such as "CAD", "USD", "EUR", "GBP"
 - note: under 80 characters saying what the figure is based on
 
-If you cannot find a credible price for this specific wine, return {"price": null}. Do not guess from similar wines and do not extrapolate from the producer's other bottlings.`,
-        },
-      ],
+If you cannot find a credible price for this specific wine, end with {"price": null}. Do not guess from similar wines and do not extrapolate from the producer's other bottlings.`,
     });
 
-    // The final text block is the answer; earlier blocks are search activity.
-    const textBlocks = message.content.filter((b) => b.type === "text");
-    const last = textBlocks[textBlocks.length - 1];
-    if (!last || last.type !== "text") return null;
-
-    const match = last.text.match(/\{[\s\S]*?"price"[\s\S]*?\}/);
-    if (!match) return null;
+    // The answer is the last {"price": ...} object; earlier text narrates the search.
+    const matches = text.match(/\{[^{}]*"price"[^{}]*\}/g);
+    if (!matches) return null;
 
     let parsed: { price?: unknown; currency?: unknown; note?: unknown };
     try {
-      parsed = JSON.parse(match[0]);
+      parsed = JSON.parse(matches[matches.length - 1]);
     } catch {
       return null;
     }

@@ -42,12 +42,17 @@ export async function POST(req: NextRequest) {
   // Backfill canonical's null/empty fields from the merge set. Doesn't
   // overwrite existing values — if you cared enough to set it on the
   // canonical, we keep it.
+  //
+  // The merged rows are deleted below, so anything not carried over here is
+  // gone for good. This list used to leave out the user's own notes and rating
+  // (plus store, list, occasion and market price): merging a copy that had
+  // notes into one that didn't permanently deleted them.
   const backfill: Record<string, unknown> = {};
   const fields: (keyof typeof canonical)[] = [
     "winery", "vintage", "varietal", "region", "country", "color",
     "price", "description", "tastingNotes", "drinkingWindow",
     "criticReviews", "foodPairings", "onlineRating", "labelImageUrl",
-    "imageData",
+    "imageData", "storeId", "listId", "occasion",
   ];
   for (const f of fields) {
     if (canonical[f] == null || canonical[f] === "") {
@@ -56,7 +61,42 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Notes: keep every distinct note — they're the user's own words.
+  const notes = [canonical, ...toMerge]
+    .map((w) => w.notes?.trim())
+    .filter((n): n is string => !!n)
+    .filter((n, i, all) => all.indexOf(n) === i);
+  if (notes.length > 0) backfill.notes = notes.join("\n\n");
+
+  // Rating: keep the canonical's; otherwise the best one from the merge set.
+  if (canonical.rating == null) {
+    const ratings = toMerge.map((w) => w.rating).filter((r): r is number => r != null);
+    if (ratings.length > 0) backfill.rating = Math.max(...ratings);
+  }
+
+  // Market price travels as a set (price, currency, note, when), never mixed.
+  if (canonical.marketPrice == null) {
+    const priced = toMerge.find((w) => w.marketPrice != null);
+    if (priced) {
+      backfill.marketPrice = priced.marketPrice;
+      backfill.marketCurrency = priced.marketCurrency;
+      backfill.marketPriceNote = priced.marketPriceNote;
+      backfill.marketPriceAt = priced.marketPriceAt;
+    }
+  }
+
+  // Most recent time any of them was opened.
+  const opened = [canonical, ...toMerge]
+    .map((w) => w.consumedAt)
+    .filter((d): d is Date => d != null)
+    .sort((a, b) => b.getTime() - a.getTime());
+  if (opened.length > 0) backfill.consumedAt = opened[0];
+
   const totalAddedQty = toMerge.reduce((n, w) => n + w.quantity, 0);
+  // Bottles merged into an emptied entry put it back in the cellar.
+  if (canonical.status === "consumed" && canonical.quantity + totalAddedQty > 0) {
+    backfill.status = "collection";
+  }
 
   await prisma.$transaction([
     // Move consumption logs to canonical

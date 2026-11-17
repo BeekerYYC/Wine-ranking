@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCategory } from "@/lib/CategoryContext";
+import { resizePhoto } from "@/lib/photo";
 
 interface ReceiptItem {
   name: string;
@@ -18,31 +19,8 @@ interface ReceiptItem {
 
 type Phase = "input" | "review" | "saving" | "done";
 
-function resizeImage(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") return;
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const maxSize = 1600; // receipts have small text, keep more detail than label photos
-        let { width, height } = img;
-        if (width > maxSize || height > maxSize) {
-          const ratio = Math.min(maxSize / width, maxSize / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        canvas.width = width;
-        canvas.height = height;
-        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.85));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
+// Receipts have small text, so keep more detail than label photos (1024px).
+const RECEIPT_MAX_SIZE = 1600;
 
 export default function ReceiptEntryPage() {
   const router = useRouter();
@@ -64,12 +42,25 @@ export default function ReceiptEntryPage() {
   const tableInputClass = "w-full px-2 py-1 rounded bg-surface border border-border-subtle text-[12px] text-text-primary placeholder-text-muted focus:outline-none focus:border-gold/30 focus:ring-1 focus:ring-gold/20 transition-all";
   const labelClass = "block text-[12px] font-medium text-text-tertiary mb-1.5 uppercase tracking-wider";
 
+  // This page kept its own copy of the resize code without any error handling,
+  // so a photo the browser couldn't decode (e.g. HEIC in desktop Chrome) left the
+  // page waiting forever. It now uses the shared helper, one photo at a time
+  // like the scan uploader, and says which photos couldn't be used.
   const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    const resized = await Promise.all(files.map(resizeImage));
-    setPhotos((prev) => [...prev, ...resized]);
     e.target.value = "";
+    if (files.length === 0) return;
+    const resized: string[] = [];
+    const failures: string[] = [];
+    for (const file of files) {
+      try {
+        resized.push(await resizePhoto(file, RECEIPT_MAX_SIZE));
+      } catch (err) {
+        failures.push(`${file.name}: ${err instanceof Error ? err.message : "could not be read"}`);
+      }
+    }
+    setPhotos((prev) => [...prev, ...resized]);
+    setError(failures.length ? `Couldn't use ${failures.join("; ")}` : null);
   };
 
   const removePhoto = (idx: number) => setPhotos((prev) => prev.filter((_, i) => i !== idx));

@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { enrichWine } from "@/lib/enrich";
+
+// Fields the list can be sorted by, and whether each can be empty.
+const SORTABLE: Record<string, boolean> = {
+  createdAt: false,
+  name: false,
+  rating: true,
+  price: true,
+  vintage: true,
+  onlineRating: true,
+  marketPrice: true,
+};
 
 // POST inlines enrichWine() — needs more than the 10s default.
 export const maxDuration = 60;
@@ -43,9 +55,19 @@ export async function GET(req: NextRequest) {
 
   const where = { AND: conditions };
 
+  // Postgres sorts empty values first when sorting high-to-low, which put every
+  // unrated bottle above the 5-star ones under "Top Rated". Optional fields
+  // sort empties last; unknown sort fields fall back to newest first instead of
+  // erroring.
+  const direction = order === "asc" ? "asc" : "desc";
+  const sortField = sort in SORTABLE ? sort : "createdAt";
+  const orderBy = SORTABLE[sortField]
+    ? [{ [sortField]: { sort: direction, nulls: "last" } }, { createdAt: "desc" }]
+    : [{ [sortField]: direction }];
+
   const wines = await prisma.wine.findMany({
     where,
-    orderBy: { [sort]: order },
+    orderBy: orderBy as Prisma.WineOrderByWithRelationInput[],
     include: { store: true, list: true },
   });
 

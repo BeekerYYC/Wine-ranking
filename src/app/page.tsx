@@ -35,10 +35,13 @@ interface Stats {
   uniqueRegions: number;
   uniqueCountries: number;
   countryBreakdown: { name: string; count: number }[];
-  monthlyAdditions: { month: string; count: number }[];
+  monthlyConsumption: { month: string; count: number }[];
 }
 
 const REGION_COLORS = ["#b73a5e", "#e0617e", "#d4849a", "#c2185b", "#8a3f5a", "#6b2d40"];
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const monthLabel = (key: string) => MONTH_NAMES[parseInt(key.slice(5), 10) - 1] || key;
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -82,8 +85,8 @@ export default function Home() {
     ? [...topCountries, { name: "Others", count: otherCount }]
     : topCountries;
 
-  // Last 6 months consumption
-  const monthlyData = stats?.monthlyAdditions?.slice(-6) || [];
+  // Bottles opened in each of the last 6 months (this used to plot bottles added)
+  const monthlyData = stats?.monthlyConsumption?.slice(-6) || [];
 
   return (
     <div className="space-y-5 pb-2">
@@ -241,7 +244,7 @@ export default function Home() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
-              <p className="text-[11px] text-text-muted uppercase tracking-widest font-medium mb-3">Top Regions</p>
+              <p className="text-[11px] text-text-muted uppercase tracking-widest font-medium mb-3">Top Countries</p>
               {pieData.length > 0 ? (
                 <div className="flex items-center gap-3">
                   <ResponsiveContainer width={120} height={120}>
@@ -275,10 +278,10 @@ export default function Home() {
 
             <div className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
               <p className="text-[11px] text-text-muted uppercase tracking-widest font-medium mb-3">Consumption Over Time</p>
-              {monthlyData.length > 0 ? (
+              {monthlyData.some((m) => m.count > 0) ? (
                 <ResponsiveContainer width="100%" height={120}>
                   <BarChart data={monthlyData}>
-                    <XAxis dataKey="month" tick={{ fill: "#75676a", fontSize: 10 }} tickFormatter={(v) => v.slice(5)} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="month" tick={{ fill: "#75676a", fontSize: 10 }} tickFormatter={monthLabel} axisLine={false} tickLine={false} />
                     <YAxis hide />
                     <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                       {monthlyData.map((_, i) => (

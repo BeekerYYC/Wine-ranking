@@ -3,7 +3,8 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCategory } from "@/lib/CategoryContext";
-import { resizePhoto } from "@/lib/photo";
+import { cropPhoto, resizePhoto } from "@/lib/photo";
+import type { Box } from "@/lib/box";
 
 type Phase = "input" | "analyzing" | "review" | "applying" | "done";
 
@@ -16,6 +17,7 @@ interface DetectedBottle {
   quantity: number;
   confidence: number;
   sourceImageIndex?: number;
+  box?: Box | null;
 }
 
 interface Candidate {
@@ -31,7 +33,7 @@ interface DiffResponse {
   totalDetectedBottles: number;
   totalDbBottles: number;
   matches: { wineId: number; name: string; dbQty: number; detectedQty: number }[];
-  quantityMismatches: { wineId: number; name: string; dbQty: number; detectedQty: number; delta: number; sourceImageIndex?: number }[];
+  quantityMismatches: { wineId: number; name: string; dbQty: number; detectedQty: number; delta: number; sourceImageIndex?: number; box?: Box | null }[];
   missingFromPhotos: { wineId: number; name: string; winery: string | null; vintage: number | null; color: string | null; dbQty: number }[];
   newInPhotos: (DetectedBottle & { candidates: Candidate[] })[];
 }
@@ -52,6 +54,10 @@ export default function CellarAuditPage() {
   const [mismatchActions, setMismatchActions] = useState<Record<number, "adjust" | "keep">>({});
   const [newActions, setNewActions] = useState<Record<number, { kind: "add" | "skip" | "merge"; mergeWineId?: number }>>({});
   const [applyResult, setApplyResult] = useState<{ applied: number; failed: number } | null>(null);
+  // Photos the AI could not read, by 1-based photo number, with the reason.
+  const [failedPhotos, setFailedPhotos] = useState<{ photo: number; reason: string }[]>([]);
+  // Close-ups of each bottle cut from its drawer photo, keyed "mm-<wineId>" / "new-<index>".
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
 
   const [resizing, setResizing] = useState({ done: 0, total: 0 });
 
@@ -84,8 +90,12 @@ export default function CellarAuditPage() {
 
   const removePhoto = (idx: number) => setPhotos((prev) => prev.filter((_, i) => i !== idx));
 
-  // Scan one photo with up to two retries on transient failure.
-  const scanOnePhoto = async (img: string, attempts = 3): Promise<DetectedBottle[]> => {
+  // Scan one photo with up to two retries on transient failure. A photo that
+  // still fails comes back as an error, not as "no bottles": treating a failed
+  // read as an empty shelf made every bottle on it look missing, pre-set to
+  // "Mark consumed" — during an AI outage, one tap marked the whole cellar drunk.
+  const scanOnePhoto = async (img: string, attempts = 3): Promise<{ bottles: DetectedBottle[] } | { error: string }> => {
+    let lastError = "could not be read";
     for (let i = 0; i < attempts; i++) {
       try {
         const res = await fetch("/api/audit/scan-one", {
@@ -93,17 +103,19 @@ export default function CellarAuditPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ image: img }),
         });
-        if (res.ok) {
-          const data = await res.json();
-          return Array.isArray(data.bottles) ? data.bottles : [];
+        const data = await res.json().catch(() => null);
+        if (res.ok && data) {
+          return { bottles: Array.isArray(data.bottles) ? data.bottles : [] };
         }
+        lastError = data?.error || `HTTP ${res.status}`;
         // 429 (rate limit) — back off before retrying
         if (res.status === 429) await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
       } catch {
+        lastError = "network error";
         await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
       }
     }
-    return [];
+    return { error: lastError };
   };
 
   const runAudit = async () => {
@@ -119,23 +131,35 @@ export default function CellarAuditPage() {
     // limits and the browser's per-origin connection cap.
     const concurrency = 4;
     const perPhotoBottles: DetectedBottle[][] = new Array(photos.length);
-    let failed = 0;
+    const failures: { photo: number; reason: string }[] = [];
     let cursor = 0;
 
     const worker = async () => {
       while (true) {
         const i = cursor++;
         if (i >= photos.length) return;
-        const bottles = await scanOnePhoto(photos[i]);
-        // Tag each detected bottle with its source image so the review UI
-        // can show a thumbnail and the user can verify visually.
-        perPhotoBottles[i] = bottles.map((b) => ({ ...b, sourceImageIndex: i }));
-        if (bottles.length === 0) failed++;
-        setScanProgress((p) => ({ done: p.done + 1, total: p.total, failed }));
+        const result = await scanOnePhoto(photos[i]);
+        if ("error" in result) {
+          failures.push({ photo: i + 1, reason: result.error });
+          perPhotoBottles[i] = [];
+        } else {
+          // Tag each detected bottle with its source image so the review UI
+          // can show a thumbnail and the user can verify visually.
+          perPhotoBottles[i] = result.bottles.map((b) => ({ ...b, sourceImageIndex: i }));
+        }
+        setScanProgress((p) => ({ done: p.done + 1, total: p.total, failed: failures.length }));
       }
     };
 
     await Promise.all(Array.from({ length: Math.min(concurrency, photos.length) }, worker));
+    failures.sort((a, b) => a.photo - b.photo);
+    setFailedPhotos(failures);
+
+    if (failures.length === photos.length) {
+      setError(`None of the photos could be read (${failures[0].reason}). Nothing was changed — please try again.`);
+      setPhase("input");
+      return;
+    }
 
     // Compute diff against DB
     try {
@@ -148,17 +172,38 @@ export default function CellarAuditPage() {
       if (!res.ok) throw new Error(data.error || "Diff failed");
       setDiff(data);
 
+      // Anything that would log bottles as drunk starts on "Keep" and has to be
+      // chosen: a bottle can be "not seen" because it was hidden behind another,
+      // out of frame, or on a shelf whose photo failed — not only because it was
+      // drunk. Adding bottles the photos clearly show stays the default.
       const ma: Record<number, "consume" | "keep"> = {};
-      data.missingFromPhotos.forEach((m: { wineId: number }) => { ma[m.wineId] = "consume"; });
+      data.missingFromPhotos.forEach((m: { wineId: number }) => { ma[m.wineId] = "keep"; });
       setMissingActions(ma);
 
       const qa: Record<number, "adjust" | "keep"> = {};
-      data.quantityMismatches.forEach((m: { wineId: number }) => { qa[m.wineId] = "adjust"; });
+      data.quantityMismatches.forEach((m: { wineId: number; delta: number }) => {
+        qa[m.wineId] = m.delta > 0 ? "adjust" : "keep";
+      });
       setMismatchActions(qa);
 
       const na: Record<number, { kind: "add" | "skip" | "merge"; mergeWineId?: number }> = {};
       data.newInPhotos.forEach((_: unknown, i: number) => { na[i] = { kind: "add" }; });
       setNewActions(na);
+
+      // Close-up thumbnails of each bottle, cut from its drawer photo.
+      const crops: Record<string, string> = {};
+      const thumbFor = async (key: string, sourceImageIndex?: number, box?: Box | null) => {
+        const src = sourceImageIndex != null ? photos[sourceImageIndex] : null;
+        if (!src || !box) return;
+        const crop = await cropPhoto(src, box, 160);
+        if (crop) crops[key] = crop;
+      };
+      await Promise.all([
+        ...data.quantityMismatches.map((m: DiffResponse["quantityMismatches"][number]) =>
+          thumbFor(`mm-${m.wineId}`, m.sourceImageIndex, m.box)),
+        ...data.newInPhotos.map((d: DetectedBottle, i: number) => thumbFor(`new-${i}`, d.sourceImageIndex, d.box)),
+      ]);
+      setThumbs(crops);
 
       setPhase("review");
     } catch (e) {
@@ -179,20 +224,30 @@ export default function CellarAuditPage() {
       }
     });
 
-    diff.quantityMismatches.forEach((m) => {
+    // The photo saved on a bottle is a close-up cut from its drawer photo, not
+    // the whole drawer — which didn't help find any one bottle. Falls back to
+    // the full photo when there's no usable box.
+    const bottlePhoto = async (sourceImageIndex?: number, box?: Box | null) => {
+      const src = sourceImageIndex != null ? photos[sourceImageIndex] : null;
+      if (!src) return null;
+      return (box && (await cropPhoto(src, box))) || src;
+    };
+
+    for (const m of diff.quantityMismatches) {
       if (mismatchActions[m.wineId] === "adjust") {
-        const sourcePhoto = m.sourceImageIndex != null ? photos[m.sourceImageIndex] : null;
         if (m.delta < 0) {
           actions.push({ type: "decrement", wineId: m.wineId, deltaQty: -m.delta });
         } else if (m.delta > 0) {
-          actions.push({ type: "increment", wineId: m.wineId, deltaQty: m.delta, imageData: sourcePhoto });
+          const imageData = await bottlePhoto(m.sourceImageIndex, m.box);
+          actions.push({ type: "increment", wineId: m.wineId, deltaQty: m.delta, imageData });
         }
       }
-    });
+    }
 
-    diff.newInPhotos.forEach((d, i) => {
+    for (const [i, d] of diff.newInPhotos.entries()) {
       const a = newActions[i] || { kind: "add" };
-      const sourcePhoto = d.sourceImageIndex != null ? photos[d.sourceImageIndex] : null;
+      if (a.kind === "skip") continue;
+      const sourcePhoto = await bottlePhoto(d.sourceImageIndex, d.box);
       if (a.kind === "add") {
         actions.push({
           type: "create",
@@ -209,7 +264,7 @@ export default function CellarAuditPage() {
       } else if (a.kind === "merge" && a.mergeWineId != null) {
         actions.push({ type: "increment", wineId: a.mergeWineId, deltaQty: d.quantity, imageData: sourcePhoto });
       }
-    });
+    }
 
     // Batch the apply calls — each action may carry a ~150KB base64 photo,
     // so we'd hit Vercel's 4.5MB body limit if we POST everything at once.
@@ -318,7 +373,7 @@ export default function CellarAuditPage() {
               </div>
             )}
             <p className="text-[11px] text-text-muted mt-2">
-              Overlapping photos are fine — duplicates are deduped by max-count. Skip blurry or very obscured bottles; AI will only count what it can confidently identify.
+              Take one photo per shelf or drawer, without overlapping — bottle counts are added up across photos. Skip blurry or very obscured bottles; AI will only count what it can confidently identify.
             </p>
           </div>
 
@@ -392,9 +447,27 @@ export default function CellarAuditPage() {
           </div>
         )}
 
+        {failedPhotos.length > 0 && (
+          <div className="bg-danger-muted border border-danger/15 rounded-xl p-3 mb-4">
+            <p className="text-[13px] text-danger font-medium">
+              {failedPhotos.length === 1
+                ? `Photo ${failedPhotos[0].photo} couldn't be read`
+                : `Photos ${failedPhotos.map((f) => f.photo).join(", ")} couldn't be read`}
+              {` (${failedPhotos[0].reason}).`}
+            </p>
+            <p className="text-[12px] text-text-tertiary mt-1">
+              Bottles on {failedPhotos.length === 1 ? "that shelf" : "those shelves"} will show as not seen below. Leave them on
+              &ldquo;Keep as-is&rdquo;, or re-shoot to include {failedPhotos.length === 1 ? "it" : "them"}.
+            </p>
+          </div>
+        )}
+
         {/* Missing from photos */}
         {diff.missingFromPhotos.length > 0 && (
-          <Section title={`In DB but not seen in photos (${diff.missingFromPhotos.length})`} subtitle="Likely consumed. Will be decremented and logged.">
+          <Section
+            title={`In DB but not seen in photos (${diff.missingFromPhotos.length})`}
+            subtitle="Not found in any photo — maybe drunk, maybe just hidden or out of frame. Nothing changes unless you choose “Mark consumed”."
+          >
             {diff.missingFromPhotos.map((m) => (
               <Row key={m.wineId}>
                 <RowInfo
@@ -403,7 +476,7 @@ export default function CellarAuditPage() {
                   badge={`DB: ${m.dbQty}`}
                 />
                 <ActionToggle
-                  value={missingActions[m.wineId] || "consume"}
+                  value={missingActions[m.wineId] || "keep"}
                   options={[
                     { value: "consume", label: "Mark consumed" },
                     { value: "keep", label: "Keep as-is" },
@@ -417,12 +490,12 @@ export default function CellarAuditPage() {
 
         {/* Quantity mismatches */}
         {diff.quantityMismatches.length > 0 && (
-          <Section title={`Count mismatch (${diff.quantityMismatches.length})`} subtitle="DB and photos disagree on how many.">
+          <Section title={`Count mismatch (${diff.quantityMismatches.length})`} subtitle="DB and photos disagree on how many. Lower counts are kept unless you choose to change them.">
             {diff.quantityMismatches.map((m) => (
               <div key={m.wineId} className="px-3 py-3 border-b border-border-subtle last:border-b-0 flex items-center gap-3">
                 {m.sourceImageIndex != null && photos[m.sourceImageIndex] && (
-                  <a href={photos[m.sourceImageIndex]} target="_blank" rel="noreferrer" className="flex-shrink-0">
-                    <img src={photos[m.sourceImageIndex]} alt="" className="w-12 h-12 object-cover rounded-md border border-border-subtle" />
+                  <a href={photos[m.sourceImageIndex]} target="_blank" rel="noreferrer" className="flex-shrink-0" title="Open the full photo">
+                    <img src={thumbs[`mm-${m.wineId}`] || photos[m.sourceImageIndex]} alt="" className="w-12 h-12 object-cover rounded-md border border-border-subtle" />
                   </a>
                 )}
                 <RowInfo
@@ -432,7 +505,7 @@ export default function CellarAuditPage() {
                   badgeTone={m.delta > 0 ? "success" : "danger"}
                 />
                 <ActionToggle
-                  value={mismatchActions[m.wineId] || "adjust"}
+                  value={mismatchActions[m.wineId] || (m.delta > 0 ? "adjust" : "keep")}
                   options={[
                     { value: "adjust", label: `Set to ${m.detectedQty}` },
                     { value: "keep", label: "Keep DB count" },
@@ -455,8 +528,8 @@ export default function CellarAuditPage() {
               return (
                 <div key={i} className="px-3 py-3 border-b border-border-subtle last:border-b-0 flex items-center gap-3">
                   {d.sourceImageIndex != null && photos[d.sourceImageIndex] && (
-                    <a href={photos[d.sourceImageIndex]} target="_blank" rel="noreferrer" className="flex-shrink-0">
-                      <img src={photos[d.sourceImageIndex]} alt="" className="w-12 h-12 object-cover rounded-md border border-border-subtle" />
+                    <a href={photos[d.sourceImageIndex]} target="_blank" rel="noreferrer" className="flex-shrink-0" title="Open the full photo">
+                      <img src={thumbs[`new-${i}`] || photos[d.sourceImageIndex]} alt="" className="w-12 h-12 object-cover rounded-md border border-border-subtle" />
                     </a>
                   )}
                   <div className="min-w-0 flex-1">

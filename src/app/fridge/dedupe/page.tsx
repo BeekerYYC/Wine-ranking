@@ -44,6 +44,14 @@ export default function DedupePage() {
   const [response, setResponse] = useState<Response | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [groupStates, setGroupStates] = useState<Record<number, GroupState>>({});
+  // Wines the user has taken out of a group ("not a duplicate"), per group.
+  const [excluded, setExcluded] = useState<Record<number, number[]>>({});
+
+  const toggleExcluded = (groupIdx: number, wineId: number) =>
+    setExcluded((s) => {
+      const cur = s[groupIdx] ?? [];
+      return { ...s, [groupIdx]: cur.includes(wineId) ? cur.filter((id) => id !== wineId) : [...cur, wineId] };
+    });
 
   useEffect(() => {
     fetch(`/api/wines/duplicates?category=${category}`)
@@ -74,8 +82,19 @@ export default function DedupePage() {
     const cur = groupStates[groupIdx];
     if (cur.phase !== "review") return;
     const canonicalId = cur.canonicalId;
-    const mergeIds = group.wines.map((w) => w.id).filter((id) => id !== canonicalId);
+    const left = excluded[groupIdx] ?? [];
+    const mergeIds = group.wines.map((w) => w.id).filter((id) => id !== canonicalId && !left.includes(id));
     if (mergeIds.length === 0) return;
+
+    // Merging deletes the other entries, so say exactly what will happen first.
+    const keep = group.wines.find((w) => w.id === canonicalId);
+    const others = group.wines.filter((w) => mergeIds.includes(w.id));
+    const ok = window.confirm(
+      `Merge ${others.length} ${others.length === 1 ? "entry" : "entries"} into “${keep?.name}” (id ${canonicalId})?\n\n` +
+      others.map((w) => `• ${w.name} (id ${w.id}, ×${w.quantity})`).join("\n") +
+      `\n\nTheir bottles, notes, ratings and drinking history move to “${keep?.name}”, then the merged entries are deleted.`,
+    );
+    if (!ok) return;
 
     setGroupStates((s) => ({ ...s, [groupIdx]: { phase: "merging", canonicalId, merging: true } }));
 
@@ -185,6 +204,8 @@ export default function DedupePage() {
 
             const canonicalId = state.phase === "review" || state.phase === "merging" ? state.canonicalId : g.suggestedCanonicalId;
             const isWorking = state.phase === "merging";
+            const left = excluded[g.idx] ?? [];
+            const mergeCount = g.wines.filter((w) => w.id !== canonicalId && !left.includes(w.id)).length;
 
             return (
               <div key={g.idx} className="bg-surface-raised border border-border-subtle rounded-xl overflow-hidden">
@@ -196,11 +217,14 @@ export default function DedupePage() {
                 </div>
                 <div>
                   {g.wines.map((w) => (
-                    <label
+                    <div
                       key={w.id}
-                      className={`flex items-center gap-3 px-4 py-2.5 border-b border-border-subtle last:border-b-0 cursor-pointer hover:bg-surface-overlay ${
+                      className={`flex items-center gap-2 pr-3 border-b border-border-subtle last:border-b-0 ${
                         canonicalId === w.id ? "bg-gold-muted/30" : ""
-                      }`}
+                      } ${left.includes(w.id) ? "opacity-50" : ""}`}
+                    >
+                    <label
+                      className="flex-1 min-w-0 flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-surface-overlay"
                     >
                       <input
                         type="radio"
@@ -223,6 +247,17 @@ export default function DedupePage() {
                         </p>
                       </div>
                     </label>
+                    {canonicalId !== w.id && (
+                      <button
+                        type="button"
+                        onClick={() => toggleExcluded(g.idx, w.id)}
+                        disabled={isWorking}
+                        className="flex-shrink-0 text-[11px] text-text-muted hover:text-text-secondary px-2 py-1 rounded border border-border-subtle transition-colors disabled:opacity-50"
+                      >
+                        {left.includes(w.id) ? "Include" : "Leave out"}
+                      </button>
+                    )}
+                    </div>
                   ))}
                 </div>
                 <div className="px-4 py-3 border-t border-border-subtle flex items-center justify-end gap-2">
@@ -235,7 +270,7 @@ export default function DedupePage() {
                   </button>
                   <button
                     onClick={() => mergeGroup(g.idx)}
-                    disabled={isWorking}
+                    disabled={isWorking || mergeCount === 0}
                     className="bg-gold/90 hover:bg-gold disabled:opacity-50 text-bg px-4 py-1.5 rounded-lg text-[12px] font-semibold transition-colors flex items-center gap-1.5"
                   >
                     {isWorking ? (
@@ -244,7 +279,7 @@ export default function DedupePage() {
                         Merging
                       </>
                     ) : (
-                      `Merge ${totalRows - 1} into selected`
+                      `Merge ${mergeCount} into selected`
                     )}
                   </button>
                 </div>

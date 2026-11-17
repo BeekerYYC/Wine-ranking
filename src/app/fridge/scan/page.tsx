@@ -82,9 +82,33 @@ export default function ScanPage() {
       // The process route reports a failed AI call as 200 + {error}, so without
       // collecting these a dead API key looked exactly like "found 0 bottles".
       const analysisErrors: string[] = [];
-      while (!done) {
-        const res = await fetch(`/api/scan/batch/${id}/process`, { method: "POST" });
-        if (!res.ok) throw new Error(await errorFrom(res, "AI analysis failed"));
+      // A request that fails outright (typically the platform timing out on one
+      // slow photo) used to end the whole scan. Now it is retried twice, then
+      // that photo is skipped. An error the server reports itself (bad API key,
+      // signed out) won't fix itself on retry, so it still stops the scan. The
+      // cap makes an endless loop impossible whatever the server returns.
+      let failuresInARow = 0;
+      let skipped = 0;
+      const maxRequests = photos.length * 4 + 10;
+      for (let attempt = 0; !done && attempt < maxRequests; attempt++) {
+        const skip = failuresInARow >= 3;
+        let res: Response | null = null;
+        try {
+          res = await fetch(`/api/scan/batch/${id}/process${skip ? "?skip=1" : ""}`, { method: "POST" });
+        } catch {
+          res = null; // network blip: retry like a timeout
+        }
+        if (res && !res.ok) {
+          const body = await res.clone().json().catch(() => null);
+          if (body?.error) throw new Error(String(body.error));
+        }
+        if (!res || !res.ok) {
+          failuresInARow++;
+          await new Promise((r) => setTimeout(r, 1500 * Math.min(failuresInARow, 3)));
+          continue;
+        }
+        failuresInARow = 0;
+        if (skip) skipped++;
         const data = await res.json();
 
         if (data.error) {
@@ -102,6 +126,11 @@ export default function ScanPage() {
         done = data.done;
       }
 
+      if (!done) throw new Error("The scan stopped responding. Please try again.");
+      if (skipped > 0) {
+        setError(`${skipped} photo${skipped > 1 ? "s" : ""} kept timing out and ${skipped > 1 ? "were" : "was"} skipped.`);
+      }
+
       if (itemsFoundRef.current === 0 && analysisErrors.length > 0) {
         const first = analysisErrors[0];
         setError(
@@ -113,7 +142,15 @@ export default function ScanPage() {
 
       setStage("done");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Scan failed");
+      const message = err instanceof Error ? err.message : "Scan failed";
+      // Bottles already identified are saved in the batch; let them be reviewed
+      // rather than throwing that work away.
+      if (itemsFoundRef.current > 0) {
+        setError(`${message} You can still review the bottles found so far.`);
+        setStage("done");
+        return;
+      }
+      setError(message);
       setStage("upload");
     }
   };

@@ -63,6 +63,7 @@ interface Stats {
   colorBreakdown: { name: string; count: number }[];
   countryBreakdown: { name: string; count: number }[];
   monthlyAdditions: { month: string; count: number }[];
+  monthlyConsumption: { month: string; count: number }[];
   topWines: { id: number; name: string; winery: string; rating: number; vintage: number }[];
   recentActivity: Activity[];
 }
@@ -185,14 +186,15 @@ export default function Dashboard() {
 
   const taste = buildTasteProfile(stats.varietalBreakdown, stats.colorBreakdown);
   const insight = buildAiInsight(stats, taste);
-  const monthlyData = stats.monthlyAdditions?.slice(-6) || [];
+  // Bottles opened in each of the last 6 months (these charts used to plot bottles added)
+  const monthlyData = stats.monthlyConsumption?.slice(-6) || [];
   const topCountries = stats.countryBreakdown.slice(0, 5);
   const totalCountryCount = topCountries.reduce((s, c) => s + c.count, 0);
   const otherCount = stats.total - totalCountryCount;
   const pieData = otherCount > 0 ? [...topCountries, { name: "Others", count: otherCount }] : topCountries;
 
-  // Build a sparkline of avgDaysBetween from consumption logs - approximate from monthly
-  const paceSparkline = monthlyData.length > 0 ? monthlyData.map((m, i) => ({ x: i, y: m.count })) : [];
+  // Drinking pace: bottles opened per month
+  const paceSparkline = monthlyData.map((m, i) => ({ x: i, y: m.count }));
 
   return (
     <div className="space-y-5 pb-2">
@@ -283,7 +285,7 @@ export default function Dashboard() {
             <h3 className="font-serif text-[15px] font-semibold">Consumption Over Time</h3>
             <span className="text-[10px] text-text-muted px-2 py-0.5 rounded bg-surface-overlay">6M</span>
           </div>
-          {monthlyData.length > 0 ? (
+          {monthlyData.some((m) => m.count > 0) ? (
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={monthlyData}>
                 <XAxis
@@ -311,7 +313,7 @@ export default function Dashboard() {
         </div>
 
         <div className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
-          <h3 className="font-serif text-[15px] font-semibold mb-3">Top Regions</h3>
+          <h3 className="font-serif text-[15px] font-semibold mb-3">Top Countries</h3>
           <div className="flex items-center gap-3">
             <ResponsiveContainer width={130} height={130}>
               <PieChart>
@@ -388,7 +390,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex-1 h-12">
-            {paceSparkline.length > 1 && (
+            {paceSparkline.some((p) => p.y > 0) && (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={paceSparkline}>
                   <Line type="monotone" dataKey="y" stroke="#e0617e" strokeWidth={2} dot={false} />
