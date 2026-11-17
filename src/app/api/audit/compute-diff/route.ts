@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { normalizeColor } from "@/lib/colors";
+import type { Box } from "@/lib/box";
 
 interface DetectedBottle {
   name: string;
@@ -9,13 +11,16 @@ interface DetectedBottle {
   color: string | null;
   quantity: number;
   confidence: number;
-  sourceImageIndex?: number; // optional — client may attach this for review UI
+  sourceImageIndex?: number; // which photo it was seen in, for the review UI
+  box?: Box | null; // where in that photo, for a cropped thumbnail
 }
 
 function normalize(s: string | null | undefined): string {
   return (s ?? "")
     .toLowerCase()
-    .replace(/[''’]/g, "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // é → e, so "Rosé" and "Rose" agree
+    .replace(/['‘’]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\b(19|20)\d{2}\b/g, " ") // strip 4-digit vintages
     .replace(/\b(partially|visible|partial|obscured|blurry|unknown)\b/g, " ") // strip AI hedge words
@@ -43,71 +48,71 @@ interface DbWine {
   quantity: number;
 }
 
-// Match a detected bottle to a DB wine using a series of strategies.
-// Each candidate gets a score; we return the highest non-zero scorer.
-function matchWine(detected: DetectedBottle, collection: DbWine[]): DbWine | null {
-  const dName = normalize(detected.name);
-  const dWinery = normalize(detected.winery);
-  const dVintage = detected.vintage;
-  const dTokens = tokensOf(dName);
+const MATCH_THRESHOLD = 30;
+
+/**
+ * How likely a detected bottle is this cellar wine (0 = not this wine).
+ *
+ * Two things this used to get wrong, both reproduced against real data:
+ * - A shared producer was enough on its own. "Kloof Street Swartland Rosé"
+ *   matched the cellar's "Kloof Street Old Vine Chenin" — a different wine of a
+ *   different colour — so the rosé was never offered as new and the Chenin's
+ *   count went up instead. Producer words now don't count as name evidence, and
+ *   the name itself has to agree.
+ * - A different colour or vintage didn't count against a match. Both are now
+ *   disqualifying when both sides know them, like the duplicate finder does.
+ */
+function matchScore(d: DetectedBottle, w: DbWine): number {
+  const dColor = normalizeColor(d.color);
+  const wColor = normalizeColor(w.color);
+  if (dColor && wColor && dColor !== wColor) return 0;
+  if (d.vintage && w.vintage && d.vintage !== w.vintage) return 0;
+
+  const dName = normalize(d.name);
+  const wName = normalize(w.name);
+  const dWinery = normalize(d.winery);
+  const wWinery = normalize(w.winery);
   const dWineryTokens = tokensOf(dWinery);
+  const wWineryTokens = tokensOf(wWinery);
+  const producer = new Set([...dWineryTokens, ...wWineryTokens]);
+  // Name tokens that aren't just the producer's name repeated.
+  const dCore = tokensOf(dName).filter((t) => !producer.has(t));
+  const wCore = tokensOf(wName).filter((t) => !producer.has(t));
 
-  // No usable name → can't match anything
-  if (dTokens.length === 0 && dWineryTokens.length === 0) return null;
+  // Two named producers that share nothing: only a distinctive shared name (two
+  // or more words, e.g. "Miraval Rosé" under "Château Miraval" vs "Perrin") can
+  // still be the same wine. A generic one like "Rouge" can't.
+  const producersDisjoint = !!dWinery && !!wWinery && tokenOverlap(dWineryTokens, wWineryTokens) === 0;
+  if (producersDisjoint && tokenOverlap(tokensOf(dName), tokensOf(wName)) < 2) return 0;
 
-  let best: { wine: DbWine; score: number } | null = null;
-
-  for (const w of collection) {
-    const wName = normalize(w.name);
-    const wWinery = normalize(w.winery);
-    const wTokens = tokensOf(wName);
-    const wWineryTokens = tokensOf(wWinery);
-
-    let score = 0;
-
-    // 1. Exact normalized name
-    if (dName && wName && dName === wName) score += 100;
-
-    // 2. Substring containment (one inside the other, longer side ≥ 5 chars)
-    if (score === 0 && dName.length >= 5 && wName.length >= 5) {
-      if (wName.includes(dName) || dName.includes(wName)) score += 60;
-    }
-
-    // 3. Token overlap on names (need at least 2 matching tokens of length ≥ 3)
-    const nameOverlap = tokenOverlap(dTokens, wTokens);
-    if (nameOverlap >= 2) score += 20 + nameOverlap * 5;
-
-    // 4. Winery match (covers cases where AI puts producer in winery field,
-    //    DB puts it as a prefix on name). Compare both winery↔winery and
-    //    winery↔name tokens.
-    if (dWinery && wWinery && dWinery === wWinery) score += 40;
-    else {
-      const wineryToNameOverlap =
-        tokenOverlap(dWineryTokens, wTokens) + tokenOverlap(wWineryTokens, dTokens);
-      if (wineryToNameOverlap >= 1) score += 10 * wineryToNameOverlap;
-    }
-
-    // 5. Vintage agreement
-    if (dVintage && w.vintage && dVintage === w.vintage) score += 15;
-
-    // 6. Color agreement (small nudge to break ties)
-    if (detected.color && w.color && detected.color === w.color) score += 5;
-
-    if (score > 0 && (!best || score > best.score)) {
-      best = { wine: w, score };
-    }
+  let nameScore = 0;
+  if (dName && wName && dName === wName) nameScore = 100;
+  else if (dName.length >= 5 && wName.length >= 5 && (wName.includes(dName) || dName.includes(wName))) nameScore = 60;
+  else {
+    const core = tokenOverlap(dCore, wCore);
+    if (core >= 1) nameScore = 20 + 10 * core;
   }
+  if (nameScore === 0) return 0;
 
-  // Require a minimum score so we don't grab on a single weak signal
-  return best && best.score >= 25 ? best.wine : null;
+  let score = nameScore;
+  if (dWinery && wWinery) {
+    if (dWinery === wWinery) score += 40;
+    else if (!producersDisjoint) score += 20;
+    else score -= 40; // unrelated producers: only a strong name match survives
+  } else {
+    // One side has no producer — accept it showing up as part of the other's name.
+    score += 10 * (tokenOverlap(dWineryTokens, tokensOf(wName)) + tokenOverlap(wWineryTokens, tokensOf(dName)));
+  }
+  if (d.vintage && w.vintage && d.vintage === w.vintage) score += 15;
+  if (dColor && wColor && dColor === wColor) score += 5;
+  return score;
 }
 
-// Returns top 3 candidate matches for a detected bottle (for the review UI's
-// "merge with existing" dropdown). Same scoring as matchWine but doesn't
-// enforce the minimum threshold — we always show some suggestions.
-function topCandidates(detected: DetectedBottle, collection: DbWine[], k = 3): DbWine[] {
-  const dName = normalize(detected.name);
-  const dWinery = normalize(detected.winery);
+// Top 3 cellar wines a detected bottle might be, for the review UI's "merge
+// with existing" dropdown. Looser than a match: always offers something.
+function topCandidates(d: DetectedBottle, collection: DbWine[], k = 3): DbWine[] {
+  const dName = normalize(d.name);
+  const dWinery = normalize(d.winery);
   const dTokens = tokensOf(dName);
   const dWineryTokens = tokensOf(dWinery);
 
@@ -126,7 +131,7 @@ function topCandidates(detected: DetectedBottle, collection: DbWine[], k = 3): D
     if (dWinery && wWinery && dWinery === wWinery) s += 40;
     const wo = tokenOverlap(dWineryTokens, wTokens) + tokenOverlap(wWineryTokens, dTokens);
     if (wo >= 1) s += 5 * wo;
-    if (detected.vintage && w.vintage && detected.vintage === w.vintage) s += 15;
+    if (d.vintage && w.vintage && d.vintage === w.vintage) s += 15;
     if (s > 0) scored.push({ wine: w, score: s });
   }
   scored.sort((a, b) => b.score - a.score);
@@ -143,15 +148,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "perPhotoBottles required" }, { status: 400 });
   }
 
-  // Aggregate across photos — MAX quantity per (name, winery, vintage) key,
-  // keeping the first sourceImageIndex seen for review-UI thumbnails.
+  // Add counts up across photos: each photo is a different shelf or drawer, so
+  // 2 bottles on one shelf and 2 on another are 4 bottles. This used to take the
+  // highest single count instead, which reported 2 — and the review then offered
+  // to log the other 2 as drunk. For the thumbnail, keep the sighting the AI was
+  // most confident about.
   const agg = new Map<string, DetectedBottle>();
   for (let i = 0; i < perPhotoBottles.length; i++) {
-    for (const b of perPhotoBottles[i]) {
+    for (const b of perPhotoBottles[i] ?? []) {
       const key = `${normalize(b.name)}|${normalize(b.winery)}|${b.vintage ?? ""}`;
       const tagged: DetectedBottle = { ...b, sourceImageIndex: b.sourceImageIndex ?? i };
       const prev = agg.get(key);
-      if (!prev || tagged.quantity > prev.quantity) agg.set(key, tagged);
+      if (!prev) {
+        agg.set(key, tagged);
+      } else {
+        const best = (tagged.confidence ?? 0) > (prev.confidence ?? 0) ? tagged : prev;
+        agg.set(key, { ...best, quantity: prev.quantity + tagged.quantity });
+      }
     }
   }
   const detected = Array.from(agg.values());
@@ -161,13 +174,31 @@ export async function POST(req: NextRequest) {
     select: { id: true, name: true, winery: true, vintage: true, color: true, quantity: true },
   });
 
-  const matchedDbIds = new Set<number>();
+  // Pair detections with cellar wines one-to-one, strongest pairs first. Each
+  // detection used to pick its best wine independently, so two different
+  // bottles could both claim the same wine and adjust its count twice.
+  const pairs: { d: number; w: number; score: number }[] = [];
+  detected.forEach((d, di) =>
+    collection.forEach((w, wi) => {
+      const score = matchScore(d, w);
+      if (score >= MATCH_THRESHOLD) pairs.push({ d: di, w: wi, score });
+    }),
+  );
+  pairs.sort((a, b) => b.score - a.score);
+  const wineFor = new Map<number, DbWine>();
+  const claimed = new Set<number>();
+  for (const p of pairs) {
+    if (wineFor.has(p.d) || claimed.has(p.w)) continue;
+    wineFor.set(p.d, collection[p.w]);
+    claimed.add(p.w);
+  }
+
   const matches: { wineId: number; name: string; dbQty: number; detectedQty: number }[] = [];
   const newInPhotos: (DetectedBottle & { candidates: { wineId: number; name: string; winery: string | null; vintage: number | null; dbQty: number }[] })[] = [];
-  const quantityMismatches: { wineId: number; name: string; dbQty: number; detectedQty: number; delta: number; sourceImageIndex?: number }[] = [];
+  const quantityMismatches: { wineId: number; name: string; dbQty: number; detectedQty: number; delta: number; sourceImageIndex?: number; box?: Box | null }[] = [];
 
-  for (const d of detected) {
-    const match = matchWine(d, collection);
+  detected.forEach((d, di) => {
+    const match = wineFor.get(di);
     if (!match) {
       const candidates = topCandidates(d, collection, 3).map((w) => ({
         wineId: w.id,
@@ -177,9 +208,8 @@ export async function POST(req: NextRequest) {
         dbQty: w.quantity,
       }));
       newInPhotos.push({ ...d, candidates });
-      continue;
+      return;
     }
-    matchedDbIds.add(match.id);
     if (d.quantity === match.quantity) {
       matches.push({ wineId: match.id, name: match.name, dbQty: match.quantity, detectedQty: d.quantity });
     } else {
@@ -190,12 +220,13 @@ export async function POST(req: NextRequest) {
         detectedQty: d.quantity,
         delta: d.quantity - match.quantity,
         sourceImageIndex: d.sourceImageIndex,
+        box: d.box ?? null,
       });
     }
-  }
+  });
 
   const missingFromPhotos = collection
-    .filter((w) => !matchedDbIds.has(w.id))
+    .filter((_, wi) => !claimed.has(wi))
     .map((w) => ({
       wineId: w.id,
       name: w.name,

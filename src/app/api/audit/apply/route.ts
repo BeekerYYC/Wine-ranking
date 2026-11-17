@@ -39,6 +39,13 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
+    // Counts must be positive whole numbers; the direction comes from the type.
+    if ((action.type === "decrement" || action.type === "increment") &&
+        !(Number.isInteger(action.deltaQty) && (action.deltaQty as number) > 0)) {
+      results.push({ type: action.type, wineId: action.wineId, ok: false, detail: "invalid quantity" });
+      continue;
+    }
+
     if (action.type === "decrement" && action.wineId != null && action.deltaQty != null) {
       const wine = await prisma.wine.findUnique({ where: { id: action.wineId } });
       if (!wine) {
@@ -57,8 +64,12 @@ export async function POST(req: NextRequest) {
         where: { id: wine.id },
         data: {
           quantity: newQty,
-          // First time we mark this wine consumed → stamp consumedAt.
-          ...(newQty === 0 && !wine.consumedAt ? { consumedAt: new Date(), status: "consumed" } : {}),
+          // Bottles were drunk, so stamp when. An empty wine is consumed whether
+          // or not it was opened before — this used to require consumedAt to be
+          // unset, so a wine opened earlier stayed "in collection" at zero
+          // bottles, invisible in the cellar.
+          ...(consumedDelta > 0 ? { consumedAt: new Date() } : {}),
+          ...(newQty === 0 ? { status: "consumed" } : {}),
         },
       });
       results.push({ type: "decrement", wineId: updated.id, ok: true, detail: `qty ${wine.quantity} → ${newQty}` });
