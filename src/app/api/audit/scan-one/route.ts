@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic();
+import { askForJson, arrayOf, hasApiKey, imageBlock, int, nullable, num, object, oneOf, str } from "@/lib/claude";
 
 export const maxDuration = 60;
 
+const DETECT_SCHEMA = object({
+  bottles: arrayOf(object({
+    name: str,
+    winery: nullable(str),
+    vintage: nullable(int),
+    varietal: nullable(str),
+    color: nullable(oneOf(["red", "white", "rosé", "sparkling", "dessert", "orange"])),
+    quantity: int,
+    confidence: num,
+  })),
+});
+
 const DETECT_PROMPT = `Identify every distinct wine bottle visible in this fridge/cellar photo.
 
-Return a JSON array. One object per UNIQUE wine — if multiple bottles of the same wine are visible, set quantity to the count rather than repeating the entry.
+List them in "bottles", one entry per UNIQUE wine — if multiple bottles of the same wine are visible, set quantity to the count rather than repeating the entry.
 
-Fields per object:
+Fields per entry:
 - name: wine name (string, required) — be precise: include vintage/cuvée if visible
 - winery: producer name (string or null)
 - vintage: year as a number (or null)
@@ -18,40 +28,24 @@ Fields per object:
 - quantity: how many bottles of this exact wine are visible (number, minimum 1)
 - confidence: 0.0 to 1.0 — your confidence in this identification
 
-Only count bottles that are clearly visible enough to identify. If a bottle is too obscured/blurry to identify confidently, omit it. Return ONLY a valid JSON array. No markdown code blocks, no prose.`;
+Only count bottles that are clearly visible enough to identify. If a bottle is too obscured/blurry to identify confidently, omit it. If none can be identified, return an empty list.`;
 
 export async function POST(req: NextRequest) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!hasApiKey()) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 });
   }
 
   const { image } = (await req.json()) as { image: string };
   if (!image) return NextResponse.json({ error: "image required" }, { status: 400 });
 
-  const base64 = image.replace(/^data:image\/\w+;base64,/, "");
-  const mediaType: "image/png" | "image/jpeg" = image.startsWith("data:image/png") ? "image/png" : "image/jpeg";
-
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096,
-      messages: [{
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-          { type: "text", text: DETECT_PROMPT },
-        ],
-      }],
+    // Structured output guarantees the reply parses. A parse failure used to be
+    // reported as "no bottles", which hid real errors.
+    const result = await askForJson<{ bottles: Record<string, unknown>[] }>({
+      content: [imageBlock(image), { type: "text", text: DETECT_PROMPT }],
+      schema: DETECT_SCHEMA,
     });
-    const text = message.content[0].type === "text" ? message.content[0].text : "[]";
-    const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    let parsed;
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch {
-      return NextResponse.json({ bottles: [] });
-    }
-    if (!Array.isArray(parsed)) return NextResponse.json({ bottles: [] });
+    const parsed = Array.isArray(result.bottles) ? result.bottles : [];
 
     const bottles = parsed.map((b: Record<string, unknown>) => ({
       name: typeof b.name === "string" ? b.name : "",

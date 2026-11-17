@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic();
+import {
+  askForJson, hasApiKey, imageBlock, int, nullable, num, object, oneOf, str, toConfidence, toScore,
+} from "@/lib/claude";
+import { CATEGORIES, Category } from "@/lib/categories";
 
 export const maxDuration = 60;
 
@@ -62,46 +63,52 @@ Extract and return a JSON object with these fields:
 - confidence: how confident you are in this identification, 0.0 to 1.0`,
 };
 
+function analyzeSchema(category: Category) {
+  return object({
+    name: str,
+    winery: nullable(str),
+    vintage: nullable(int),
+    varietal: nullable(str),
+    region: nullable(str),
+    country: nullable(str),
+    color: nullable(oneOf(CATEGORIES[category].types.map((t) => t.value))),
+    description: nullable(str),
+    tastingNotes: nullable(str),
+    drinkingWindow: nullable(str),
+    criticReviews: nullable(str),
+    foodPairings: nullable(str),
+    onlineRating: nullable(num),
+    confidence: num,
+  });
+}
+
 export async function POST(req: NextRequest) {
-  const { imageData, category = "wine" } = await req.json();
+  const { imageData, category: rawCategory = "wine" } = await req.json();
+  const category: Category = rawCategory in CATEGORIES ? rawCategory : "wine";
 
   if (!imageData) {
     return NextResponse.json({ error: "No image provided" }, { status: 400 });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!hasApiKey()) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 });
   }
 
-  const base64 = imageData.replace(/^data:image\/\w+;base64,/, "");
-  const mediaType = imageData.startsWith("data:image/png") ? "image/png" : "image/jpeg";
-
-  const prompt = PROMPTS[category] || PROMPTS.wine;
-
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 3072,
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-          { type: "text", text: `${prompt}\n\nReturn ONLY valid JSON, no markdown code blocks or other text.` },
-        ],
-      },
-    ],
-  });
-
-  const text = message.content[0].type === "text" ? message.content[0].text : "";
-  // Claude sometimes wraps its JSON in markdown fences despite the prompt;
-  // strip them before parsing (same pattern as scan/batch/process and
-  // receipt/parse).
-  const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-
+  // Structured output guarantees the reply parses — no fence-stripping needed.
   try {
-    const parsed = JSON.parse(cleaned);
-    return NextResponse.json(parsed);
-  } catch {
-    return NextResponse.json({ error: "Failed to parse AI response", raw: text }, { status: 500 });
+    const info = await askForJson<Record<string, unknown>>({
+      content: [imageBlock(imageData), { type: "text", text: PROMPTS[category] }],
+      schema: analyzeSchema(category),
+    });
+    return NextResponse.json({
+      ...info,
+      onlineRating: toScore(info.onlineRating),
+      confidence: toConfidence(info.confidence),
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Could not analyze the label" },
+      { status: 502 }
+    );
   }
 }

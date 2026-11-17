@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import Anthropic from "@anthropic-ai/sdk";
+import {
+  askForJson, arrayOf, hasApiKey, imageBlock, int, nullable, num, object, oneOf, str, toConfidence, toScore,
+} from "@/lib/claude";
+import { CATEGORIES, Category } from "@/lib/categories";
 
-const anthropic = new Anthropic();
-
+// Each call reads one photo with Claude, which takes longer than the default
+// function budget.
 export const maxDuration = 60;
 
 const SCAN_PROMPTS: Record<string, string> = {
   wine: `Analyze this wine image. It may show a SINGLE bottle or MULTIPLE bottles (e.g. a wine fridge shelf/drawer).
 
-Return a JSON array of UNIQUE wine objects. If you see multiple bottles of the same wine, DO NOT repeat them — instead set a higher "quantity" count.
+List each UNIQUE wine in "items". If you see multiple bottles of the same wine, DO NOT repeat them — instead set a higher "quantity" count.
 
-Each object must have:
+Each item has:
 - name: the wine name (string)
 - winery: producer name (string or null)
 - vintage: year (number or null)
@@ -27,9 +30,9 @@ Each object must have:
 
   coffee: `Analyze this coffee image. It may show a SINGLE bag or MULTIPLE bags/containers.
 
-Return a JSON array of UNIQUE coffee objects. If you see duplicates, set a higher "quantity" count.
+List each UNIQUE coffee in "items". If you see duplicates, set a higher "quantity" count.
 
-Each object must have:
+Each item has:
 - name: the coffee name (string)
 - winery: roaster name (string or null)
 - vintage: roast date year (number or null)
@@ -45,9 +48,9 @@ Each object must have:
 
   beer: `Analyze this beer image. It may show a SINGLE can/bottle or MULTIPLE (e.g. a fridge shelf).
 
-Return a JSON array of UNIQUE beer objects. If you see duplicates, set a higher "quantity" count.
+List each UNIQUE beer in "items". If you see duplicates, set a higher "quantity" count.
 
-Each object must have:
+Each item has:
 - name: the beer name (string)
 - winery: brewery name (string or null)
 - vintage: brew date year (number or null)
@@ -62,20 +65,87 @@ Each object must have:
 - quantity: how many of this exact item you can see (number, minimum 1)`,
 };
 
+function scanSchema(category: Category) {
+  return object({
+    items: arrayOf(object({
+      name: str,
+      winery: nullable(str),
+      vintage: nullable(int),
+      varietal: nullable(str),
+      region: nullable(str),
+      country: nullable(str),
+      color: nullable(oneOf(CATEGORIES[category].types.map((t) => t.value))),
+      description: nullable(str),
+      foodPairings: nullable(str),
+      onlineRating: nullable(num),
+      confidence: num,
+      quantity: int,
+    })),
+  });
+}
+
+interface ScannedItem {
+  name: string;
+  winery: string | null;
+  vintage: number | null;
+  varietal: string | null;
+  region: string | null;
+  country: string | null;
+  color: string | null;
+  description: string | null;
+  foodPairings: string | null;
+  onlineRating: number | null;
+  confidence: number;
+  quantity: number;
+}
+
+function toScanItemData(b: ScannedItem) {
+  return {
+    name: b.name || null,
+    winery: b.winery || null,
+    vintage: Number.isInteger(b.vintage) ? b.vintage : null,
+    varietal: b.varietal || null,
+    region: b.region || null,
+    country: b.country || null,
+    color: b.color || null,
+    description: b.description || null,
+    foodPairings: b.foodPairings || null,
+    onlineRating: toScore(b.onlineRating),
+    confidence: toConfidence(b.confidence),
+    quantity: Number.isInteger(b.quantity) && b.quantity > 0 ? b.quantity : 1,
+  };
+}
+
+async function batchResponse(id: number, extra: Record<string, unknown>) {
+  const batch = await prisma.scanBatch.findUnique({
+    where: { id },
+    include: { items: { orderBy: { id: "asc" } } },
+  });
+  return NextResponse.json({ ...extra, batch });
+}
+
+/**
+ * Analyze the next pending photo in a batch. The client calls this repeatedly
+ * until it gets `done: true`.
+ *
+ * `?skip=1` marks the next pending photo as unreadable without analyzing it, so
+ * a photo whose analysis keeps timing out cannot stall the whole scan.
+ */
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ batchId: string }> }
 ) {
   const { batchId } = await params;
   const id = parseInt(batchId);
-
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 });
+  if (!Number.isFinite(id)) {
+    return NextResponse.json({ error: "Invalid batch id" }, { status: 400 });
   }
 
-  // Get batch category
-  const batch_info = await prisma.scanBatch.findUnique({ where: { id } });
-  const category = batch_info?.category || "wine";
+  const batchInfo = await prisma.scanBatch.findUnique({ where: { id } });
+  if (!batchInfo) {
+    return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+  }
+  const category: Category = batchInfo.category in CATEGORIES ? (batchInfo.category as Category) : "wine";
 
   const pendingItem = await prisma.scanItem.findFirst({
     where: { batchId: id, status: "pending" },
@@ -83,70 +153,39 @@ export async function POST(
   });
 
   if (!pendingItem) {
-    await prisma.scanBatch.update({
-      where: { id },
-      data: { status: "reviewing" },
-    });
-    const batch = await prisma.scanBatch.findUnique({
-      where: { id },
-      include: { items: { orderBy: { id: "asc" } } },
-    });
-    return NextResponse.json({ done: true, batch });
+    await prisma.scanBatch.update({ where: { id }, data: { status: "reviewing" } });
+    return batchResponse(id, { done: true });
   }
 
-  if (!pendingItem.imageData) {
-    await prisma.scanItem.update({
-      where: { id: pendingItem.id },
-      data: { status: "rejected" },
-    });
-    return NextResponse.json({ done: false, skipped: true });
+  const markUnreadable = async () => {
+    await prisma.scanItem.update({ where: { id: pendingItem.id }, data: { status: "rejected" } });
+    await prisma.scanBatch.update({ where: { id }, data: { processed: { increment: 1 } } });
+  };
+
+  if (req.nextUrl.searchParams.get("skip") === "1" || !pendingItem.imageData) {
+    await markUnreadable();
+    return batchResponse(id, { done: false, skipped: true });
   }
 
-  const base64 = pendingItem.imageData.replace(/^data:image\/\w+;base64,/, "");
-  const mediaType = pendingItem.imageData.startsWith("data:image/png") ? "image/png" : "image/jpeg";
-
-  const prompt = SCAN_PROMPTS[category] || SCAN_PROMPTS.wine;
+  if (!hasApiKey()) {
+    return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 });
+  }
 
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096,
-      messages: [
+    const result = await askForJson<{ items: ScannedItem[] }>({
+      content: [
+        imageBlock(pendingItem.imageData),
         {
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-            { type: "text", text: `${prompt}\n\nFor items where labels are partially obscured, do your best and set confidence lower.\nReturn ONLY a valid JSON array, no markdown code blocks or other text.` },
-          ],
+          type: "text",
+          text: `${SCAN_PROMPTS[category]}\n\nFor items where labels are partially obscured, do your best and set confidence lower. If you see no ${CATEGORIES[category].itemNamePlural} at all, return an empty list.`,
         },
       ],
+      schema: scanSchema(category),
     });
+    const bottles = result.items ?? [];
 
-    const text = message.content[0].type === "text" ? message.content[0].text : "[]";
-    const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    const bottles = JSON.parse(cleaned);
-
-    if (!Array.isArray(bottles) || bottles.length === 0) {
-      await prisma.scanItem.update({
-        where: { id: pendingItem.id },
-        data: { status: "rejected" },
-      });
-    } else if (bottles.length === 1) {
-      const b = bottles[0];
-      await prisma.scanItem.update({
-        where: { id: pendingItem.id },
-        data: {
-          status: "analyzed",
-          name: b.name || null, winery: b.winery || null,
-          vintage: b.vintage ? parseInt(b.vintage) : null,
-          varietal: b.varietal || null, region: b.region || null,
-          country: b.country || null, color: b.color || null,
-          description: b.description || null, foodPairings: b.foodPairings || null,
-          onlineRating: b.onlineRating ? parseFloat(b.onlineRating) : null,
-          confidence: b.confidence ? parseFloat(b.confidence) : null,
-          quantity: b.quantity ? parseInt(b.quantity) : 1,
-        },
-      });
+    if (bottles.length === 0) {
+      await prisma.scanItem.update({ where: { id: pendingItem.id }, data: { status: "rejected" } });
     } else {
       const [first, ...rest] = bottles;
       // Keep the source photo on every derived scan item so the reviewer can
@@ -156,58 +195,26 @@ export async function POST(
       const sourceImage = pendingItem.imageData;
       await prisma.scanItem.update({
         where: { id: pendingItem.id },
-        data: {
-          status: "analyzed",
-          name: first.name || null, winery: first.winery || null,
-          vintage: first.vintage ? parseInt(first.vintage) : null,
-          varietal: first.varietal || null, region: first.region || null,
-          country: first.country || null, color: first.color || null,
-          description: first.description || null, foodPairings: first.foodPairings || null,
-          onlineRating: first.onlineRating ? parseFloat(first.onlineRating) : null,
-          confidence: first.confidence ? parseFloat(first.confidence) : null,
-          quantity: first.quantity ? parseInt(first.quantity) : 1,
-        },
+        data: { status: "analyzed", ...toScanItemData(first) },
       });
-
       if (rest.length > 0) {
         await prisma.scanItem.createMany({
-          data: rest.map((b: Record<string, unknown>) => ({
-            batchId: id, sourceIndex: pendingItem.sourceIndex,
-            imageData: sourceImage, status: "analyzed",
-            name: (b.name as string) || null, winery: (b.winery as string) || null,
-            vintage: b.vintage ? parseInt(String(b.vintage)) : null,
-            varietal: (b.varietal as string) || null, region: (b.region as string) || null,
-            country: (b.country as string) || null, color: (b.color as string) || null,
-            description: (b.description as string) || null, foodPairings: (b.foodPairings as string) || null,
-            onlineRating: b.onlineRating ? parseFloat(String(b.onlineRating)) : null,
-            confidence: b.confidence ? parseFloat(String(b.confidence)) : null,
-            quantity: b.quantity ? parseInt(String(b.quantity)) : 1,
+          data: rest.map((b) => ({
+            batchId: id,
+            sourceIndex: pendingItem.sourceIndex,
+            imageData: sourceImage,
+            status: "analyzed",
+            ...toScanItemData(b),
           })),
         });
       }
     }
 
-    await prisma.scanBatch.update({
-      where: { id },
-      data: { processed: { increment: 1 } },
-    });
-
-    const batch = await prisma.scanBatch.findUnique({
-      where: { id },
-      include: { items: { orderBy: { id: "asc" } } },
-    });
-
-    return NextResponse.json({ done: false, batch });
+    await prisma.scanBatch.update({ where: { id }, data: { processed: { increment: 1 } } });
+    return batchResponse(id, { done: false });
   } catch (err) {
-    await prisma.scanItem.update({
-      where: { id: pendingItem.id },
-      data: { status: "rejected" },
-    });
-    await prisma.scanBatch.update({
-      where: { id },
-      data: { processed: { increment: 1 } },
-    });
-    return NextResponse.json({
+    await markUnreadable();
+    return batchResponse(id, {
       done: false,
       error: err instanceof Error ? err.message : "Analysis failed",
     });
