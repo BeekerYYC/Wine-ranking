@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
 import { normalizeColor } from "@/lib/colors";
 import { winePhotoSrc, wineHasNoImage } from "@/lib/wineImage";
@@ -40,6 +40,9 @@ const COLOR_DOTS: Record<string, string> = {
   dessert: "#d4a44e",
   orange: "#d48a4e",
 };
+
+/** Dot color for a stored color value, whatever its spelling ("Rosé", "rose"...). */
+const colorDot = (color?: string | null) => COLOR_DOTS[normalizeColor(color) ?? ""] ?? null;
 
 // Try to extract a critic score (e.g. "92 WS") from criticReviews field.
 function extractTopScore(criticReviews?: string | null): { score: number; source: string } | null {
@@ -405,7 +408,7 @@ const BottleMicro = () => (
 
 function PremiumWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => void }) {
   const score = extractTopScore(wine.criticReviews) || (wine.onlineRating ? { score: Math.round(wine.onlineRating), source: "AI" } : null);
-  const dotColor = wine.color ? COLOR_DOTS[wine.color] : null;
+  const dotColor = colorDot(wine.color);
   const [labelFailed, setLabelFailed] = useState(false);
   const photo = winePhotoSrc(wine);
   const src = photo || (wine.labelImageUrl && !labelFailed ? wine.labelImageUrl : null);
@@ -517,7 +520,7 @@ function ListWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => void }
           {src ? (
             <img src={src} alt={wine.name} className="h-full object-contain" onError={() => { if (!photo) setLabelFailed(true); }} />
           ) : (
-            <BottleSilhouette color={wine.color ? COLOR_DOTS[wine.color] : null} small />
+            <BottleSilhouette color={colorDot(wine.color)} small />
           )}
         </div>
         <div className="flex-1 min-w-0 py-1">
@@ -553,17 +556,20 @@ function ListWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => void }
 }
 
 function BottleSilhouette({ color, small = false }: { color: string | null; small?: boolean }) {
+  // SVG ids are page-wide: when every bottle used id="bottleGrad", they all
+  // painted with the first card's gradient, so every placeholder had one color.
+  const gradientId = `bottle-${useId().replace(/:/g, "")}`;
   return (
     <svg width={small ? 32 : 60} height={small ? 60 : 130} viewBox="0 0 60 130" fill="none">
       <defs>
-        <linearGradient id="bottleGrad" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color || "#8a3f5a"} stopOpacity="0.9" />
           <stop offset="100%" stopColor={color || "#8a3f5a"} stopOpacity="0.3" />
         </linearGradient>
       </defs>
       <path
         d="M22 2 L38 2 L38 26 Q44 30 44 40 L44 120 Q44 126 38 128 L22 128 Q16 126 16 120 L16 40 Q16 30 22 26 Z"
-        fill="url(#bottleGrad)"
+        fill={`url(#${gradientId})`}
         stroke={color || "#8a3f5a"}
         strokeWidth="1.5"
         opacity="0.85"
