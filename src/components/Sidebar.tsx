@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCategory } from "@/lib/CategoryContext";
 
@@ -22,12 +23,6 @@ const InsightsIcon = () => (
   </svg>
 );
 
-const PairingIcon = () => (
-  <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M8 2v6a4 4 0 008 0V2M12 8v14M5 22h14" />
-  </svg>
-);
-
 const ProfileIcon = () => (
   <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
     <circle cx="12" cy="8" r="4" />
@@ -41,18 +36,38 @@ const ScanIcon = ({ className = "" }: { className?: string }) => (
   </svg>
 );
 
+const GlassIcon = ({ className = "" }: { className?: string }) => (
+  <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7 3h10l-1 8a4 4 0 01-8 0L7 3zM12 15v6M8 21h8" />
+  </svg>
+);
+
+const secondaryLinkClass = "flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] text-text-muted hover:text-text-tertiary transition-colors";
+
+/**
+ * Finding a bottle to drink is the everyday job, so it's the main button (the
+ * centre button on phones). Adding wine happens every couple of months, so
+ * scanning is a regular menu item / tab.
+ */
 export default function Sidebar() {
   const pathname = usePathname();
   const { config } = useCategory();
 
+  if (pathname === "/login") return null;
+
+  const isActive = (href: string) => {
+    if (href === "/") return pathname === "/";
+    if (href === "/fridge") return pathname === "/fridge" || /^\/fridge\/(audit|dedupe)/.test(pathname) || pathname.startsWith("/wine/");
+    return pathname.startsWith(href);
+  };
+
   const nav = [
-    { href: "/", label: "Dashboard", icon: <HomeIcon /> },
+    { href: "/", label: "Home", icon: <HomeIcon /> },
     { href: "/fridge", label: "Cellar", icon: <CellarIcon /> },
     { href: "/dashboard", label: "Insights", icon: <InsightsIcon /> },
-    { href: "/fridge/drink", label: "Pairing", icon: <PairingIcon /> },
+    { href: "/fridge/scan", label: "Scan & Add", icon: <ScanIcon className="w-5 h-5" /> },
   ];
-
-  const isActive = (href: string) => href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const findActive = isActive("/fridge/drink");
 
   return (
     <>
@@ -69,15 +84,15 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Scan CTA */}
+        {/* Main action: find something to drink */}
         <div className="px-3 pt-4 pb-2">
-          <a
-            href="/fridge/scan"
-            className="flex items-center justify-center gap-2 w-full bg-gradient-to-br from-gold to-gold-light hover:opacity-90 text-bg px-4 py-2.5 rounded-xl text-[13px] font-semibold transition-all shadow-lg shadow-gold/20"
+          <Link
+            href="/fridge/drink"
+            className={`flex items-center justify-center gap-2 w-full bg-gradient-to-br from-gold to-gold-light hover:opacity-90 text-bg px-4 py-2.5 rounded-xl text-[13px] font-semibold transition-all shadow-lg shadow-gold/20 ${findActive ? "ring-2 ring-gold/40 ring-offset-2 ring-offset-bg" : ""}`}
           >
-            <ScanIcon className="w-4 h-4" />
-            Scan & Add
-          </a>
+            <GlassIcon className="w-4 h-4" />
+            Find a wine
+          </Link>
         </div>
 
         {/* Nav */}
@@ -85,7 +100,7 @@ export default function Sidebar() {
           {nav.map((item) => {
             const active = isActive(item.href);
             return (
-              <a
+              <Link
                 key={item.href}
                 href={item.href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all ${
@@ -96,54 +111,45 @@ export default function Sidebar() {
               >
                 <span className={active ? "text-gold" : "text-text-muted"}>{item.icon}</span>
                 {item.label}
-              </a>
+              </Link>
             );
           })}
         </nav>
 
-        {/* Add manual + Export */}
+        {/* Less frequent */}
         <div className="px-3 pb-4 space-y-1 border-t border-border-subtle pt-3">
-          <a
-            href="/add"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] text-text-muted hover:text-text-tertiary transition-colors"
-          >
+          <Link href="/add" className={secondaryLinkClass}>
             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
             Add manually
-          </a>
-          <a
-            href="/add/receipt"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] text-text-muted hover:text-text-tertiary transition-colors"
-          >
+          </Link>
+          <Link href="/add/receipt" className={secondaryLinkClass}>
             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             Add from receipt
-          </a>
-          <a
-            href="/fridge/audit"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] text-text-muted hover:text-text-tertiary transition-colors"
-          >
+          </Link>
+          <Link href="/fridge/audit" className={secondaryLinkClass}>
             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             Audit cellar
-          </a>
-          <a
-            href="/fridge/dedupe"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] text-text-muted hover:text-text-tertiary transition-colors"
-          >
+          </Link>
+          <Link href="/fridge/dedupe" className={secondaryLinkClass}>
             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
             </svg>
             Find duplicates
-          </a>
-          <a
-            href="/api/export"
-            download
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] text-text-muted hover:text-text-tertiary transition-colors"
-          >
+          </Link>
+          <Link href="/achievements" className={secondaryLinkClass}>
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a6 6 0 100-12 6 6 0 000 12zM8.2 13.9L7 21l5-3 5 3-1.2-7.1" />
+            </svg>
+            Badges
+          </Link>
+          {/* A file download, not a page: stays a plain link. */}
+          <a href="/api/export" download className={secondaryLinkClass}>
             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
@@ -152,7 +158,7 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      {/* Mobile bottom bar with floating scan button */}
+      {/* Mobile bottom bar; the centre button finds a wine */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50">
         <div className="relative">
           {/* The inset goes on this background wrapper, not on the tab row below:
@@ -164,20 +170,22 @@ export default function Sidebar() {
           <div className="bg-surface/95 backdrop-blur-xl border-t border-border-subtle pb-[env(safe-area-inset-bottom,0px)]">
             <div className="flex items-center justify-around h-[68px] px-2 pb-2 pt-1">
               <MobileTab href="/" label="Home" icon={<HomeIcon />} active={isActive("/")} />
-              <MobileTab href="/fridge" label="Cellar" icon={<CellarIcon />} active={isActive("/fridge") && pathname !== "/fridge/drink" && pathname !== "/fridge/scan"} />
+              <MobileTab href="/fridge" label="Cellar" icon={<CellarIcon />} active={isActive("/fridge")} />
               {/* Spacer for floating button */}
               <div className="w-14" />
               <MobileTab href="/dashboard" label="Insights" icon={<InsightsIcon />} active={isActive("/dashboard")} />
-              <MobileTab href="/fridge/drink" label="Pairing" icon={<PairingIcon />} active={isActive("/fridge/drink")} />
+              <MobileTab href="/fridge/scan" label="Add" icon={<ScanIcon className="w-5 h-5" />} active={isActive("/fridge/scan")} />
             </div>
           </div>
-          {/* Floating scan FAB */}
-          <a
-            href="/fridge/scan"
-            className="absolute left-1/2 -translate-x-1/2 -top-7 w-14 h-14 rounded-full bg-gradient-to-br from-gold to-gold-light flex items-center justify-center text-bg shadow-2xl shadow-gold/40 active:scale-95 transition-transform"
+          {/* Floating "find a wine" button */}
+          <Link
+            href="/fridge/drink"
+            aria-label="Find a wine to drink"
+            className={`absolute left-1/2 -translate-x-1/2 -top-7 w-14 h-14 rounded-full bg-gradient-to-br from-gold to-gold-light flex items-center justify-center text-bg shadow-2xl shadow-gold/40 active:scale-95 transition-transform ${findActive ? "ring-2 ring-gold/50 ring-offset-2 ring-offset-bg" : ""}`}
           >
-            <ScanIcon />
-          </a>
+            <GlassIcon />
+          </Link>
+          <span className={`absolute left-1/2 -translate-x-1/2 top-[37px] text-[9.5px] font-medium tracking-wide pointer-events-none ${findActive ? "text-gold" : "text-text-muted"}`}>Pair</span>
         </div>
       </nav>
     </>
@@ -186,12 +194,12 @@ export default function Sidebar() {
 
 function MobileTab({ href, label, icon, active }: { href: string; label: string; icon: React.ReactNode; active: boolean }) {
   return (
-    <a
+    <Link
       href={href}
       className={`flex flex-col items-center justify-center gap-0.5 flex-1 transition-colors ${active ? "text-gold" : "text-text-muted"}`}
     >
       {icon}
       <span className="text-[9.5px] font-medium tracking-wide">{label}</span>
-    </a>
+    </Link>
   );
 }

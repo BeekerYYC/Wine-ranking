@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
 import WineImage from "@/components/WineImage";
+import { ReviewBell } from "@/components/DrinkFlow";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -179,9 +181,9 @@ export default function Dashboard() {
       <div className="w-16 h-16 rounded-2xl bg-gold-muted flex items-center justify-center mx-auto mb-4 text-3xl">{config.icon}</div>
       <h2 className="font-serif text-[22px] font-semibold mb-1">No data yet</h2>
       <p className="text-[13px] text-text-tertiary mb-5">Add {config.itemNamePlural} to see your insights</p>
-      <a href="/fridge/scan" className="inline-flex items-center gap-2 bg-gradient-to-br from-gold to-gold-light text-bg px-5 py-2.5 rounded-xl text-[13px] font-semibold transition-all shadow-lg shadow-gold/20">
+      <Link href="/fridge/scan" className="inline-flex items-center gap-2 bg-gradient-to-br from-gold to-gold-light text-bg px-5 py-2.5 rounded-xl text-[13px] font-semibold transition-all shadow-lg shadow-gold/20">
         Scan {config.itemNamePlural}
-      </a>
+      </Link>
     </div>
   );
 
@@ -207,11 +209,8 @@ export default function Dashboard() {
           </h1>
           <p className="text-[13px] text-text-tertiary mt-1">Here&apos;s your wine journey at a glance.</p>
         </div>
-        <button className="relative w-10 h-10 rounded-full bg-surface-raised border border-border-subtle flex items-center justify-center text-text-tertiary hover:text-text-secondary transition-colors">
-          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-          </svg>
-        </button>
+        {/* Opened bottles waiting for a rating; tap to rate them. */}
+        <ReviewBell />
       </div>
 
       {/* Overview card */}
@@ -361,12 +360,12 @@ export default function Dashboard() {
               <span className="text-[13px] font-semibold text-cream">AI Insight</span>
             </div>
             <p className="text-[12.5px] text-text-secondary leading-relaxed mb-3">{insight}</p>
-            <a href="/fridge/drink" className="inline-flex items-center gap-1.5 bg-cream/15 hover:bg-cream/25 text-cream border border-cream/20 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all">
+            <Link href="/fridge/drink" className="inline-flex items-center gap-1.5 bg-cream/15 hover:bg-cream/25 text-cream border border-cream/20 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all">
               Explore Recommendations
               <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -407,16 +406,16 @@ export default function Dashboard() {
         <div className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-serif text-[15px] font-semibold">Recent Activity</h3>
-            <a href="/fridge" className="text-[12px] text-text-tertiary hover:text-gold transition-colors flex items-center gap-1">
+            <Link href="/fridge" className="text-[12px] text-text-tertiary hover:text-gold transition-colors flex items-center gap-1">
               See all
               <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
-            </a>
+            </Link>
           </div>
           <div className="space-y-2">
             {stats.recentActivity.slice(0, 5).map((act) => (
-              <a
+              <Link
                 key={act.id}
                 href={`/wine/${act.wineId}`}
                 className="flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-surface-overlay transition-colors"
@@ -451,7 +450,7 @@ export default function Dashboard() {
                     </span>
                   </div>
                 )}
-              </a>
+              </Link>
             ))}
           </div>
         </div>

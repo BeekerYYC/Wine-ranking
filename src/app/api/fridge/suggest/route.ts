@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { askForJson, arrayOf, hasApiKey, int, object, str } from "@/lib/claude";
+import { idsWithPhoto } from "@/lib/wineSelect";
 
 // A pairing suggestion is one Claude call, which can outlast the default budget.
 export const maxDuration = 60;
@@ -28,7 +29,8 @@ export async function POST(req: NextRequest) {
     orderBy: { rating: { sort: "desc", nulls: "last" } },
     select: {
       id: true, name: true, vintage: true, winery: true, color: true, varietal: true,
-      region: true, rating: true, price: true, foodPairings: true,
+      region: true, country: true, rating: true, price: true, foodPairings: true,
+      quantity: true, labelImageUrl: true,
     },
   });
 
@@ -63,10 +65,26 @@ ${itemList}`,
 
   // Only offer bottles that are really in the fridge — "Open" on a made-up ID
   // would fail.
-  const inFridge = new Map(wines.map((w) => [w.id, w.name]));
+  // Each pick carries what's needed to find the bottle in the fridge — its photo
+  // (or label image), producer, vintage and how many are left — not just a name.
+  const inFridge = new Map(wines.map((w) => [w.id, w]));
+  const withPhoto = await idsWithPhoto({ id: { in: wines.map((w) => w.id) } });
+  const seen = new Set<number>();
   const picks = [result.suggestion, ...(result.alternatives ?? [])]
-    .filter((p) => p && inFridge.has(p.wineId))
-    .map((p) => ({ ...p, name: inFridge.get(p.wineId)! }));
+    .filter((p) => p && inFridge.has(p.wineId) && !seen.has(p.wineId) && seen.add(p.wineId))
+    .map((p) => {
+      const w = inFridge.get(p.wineId)!;
+      return {
+        wineId: w.id,
+        name: w.name,
+        reason: p.reason,
+        wine: {
+          id: w.id, name: w.name, winery: w.winery, vintage: w.vintage, varietal: w.varietal,
+          color: w.color, region: w.region, country: w.country, quantity: w.quantity,
+          labelImageUrl: w.labelImageUrl, hasImage: withPhoto.has(w.id),
+        },
+      };
+    });
 
   if (picks.length === 0) {
     return NextResponse.json({ error: "Could not match a suggestion to your collection — try again" }, { status: 502 });
