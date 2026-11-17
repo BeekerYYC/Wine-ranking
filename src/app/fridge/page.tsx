@@ -5,7 +5,6 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
 import { normalizeColor } from "@/lib/colors";
 import { winePhotoSrc, wineHasNoImage } from "@/lib/wineImage";
-import { useDrinkFlow } from "@/components/DrinkFlow";
 import MoreMenu from "@/components/MoreMenu";
 import FindLabelsModal from "@/components/FindLabelsModal";
 import EnrichAllModal from "@/components/EnrichAllModal";
@@ -76,7 +75,6 @@ export default function FridgePage() {
   const [colorFilter, setColorFilter] = useState<string>("");
   const [sort, setSort] = useState<"createdAt" | "rating" | "name">("createdAt");
   const [view, setView] = useState<"grid" | "list">("grid");
-  const { openBottle } = useDrinkFlow();
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [missingImageCount, setMissingImageCount] = useState(0);
@@ -142,18 +140,9 @@ export default function FridgePage() {
 
   const totalBottles = wines.reduce((s, w) => s + w.quantity, 0);
 
-  // One tap opens a bottle; the rating comes later from the review queue (an
-  // "Enjoy" message with Undo covers a mis-tap). This used to open a rating form
-  // for a bottle that had only just been opened.
-  const openOne = async (wine: Wine) => {
-    try {
-      await openBottle({ id: wine.id, name: wine.name });
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Couldn't open that bottle");
-    }
-  };
-
-  // Keep the shelf in step with opens and undos from anywhere in the app.
+  // Bottles are opened from the pairing page or a wine's own page, not from
+  // the shelf, where a stray tap while scrolling would take one out. Keep the
+  // shelf in step with opens and undos made anywhere in the app.
   useEffect(() => {
     const onChanged = (e: Event) => {
       const w = (e as CustomEvent).detail as { id?: number; quantity?: number; status?: string };
@@ -180,7 +169,9 @@ export default function FridgePage() {
   return (
     <div className="space-y-4 pb-2">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
+      {/* On a phone the buttons sit under the title: side by side, they squeezed
+          the title and tagline into a narrow column. */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="font-serif text-[28px] sm:text-[34px] font-semibold leading-tight">My {config.fridgeLabel}</h1>
@@ -217,6 +208,7 @@ export default function FridgePage() {
           )}
           <button
             onClick={() => setShowSearch(!showSearch)}
+            aria-label="Search"
             className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${
               showSearch ? "bg-gold-muted border-gold/30 text-gold" : "bg-surface-raised border-border-subtle text-text-tertiary hover:text-text-secondary"
             }`}
@@ -225,15 +217,7 @@ export default function FridgePage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </button>
-          <Link
-            href="/fridge/audit"
-            title="Audit cellar against photos"
-            className="w-10 h-10 rounded-xl bg-surface-raised border border-border-subtle flex items-center justify-center text-text-tertiary hover:text-gold hover:border-gold/30 transition-all"
-          >
-            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </Link>
+          {/* Audit cellar lives in this menu, next to the other restocking tools. */}
           <MoreMenu />
         </div>
       </div>
@@ -297,6 +281,7 @@ export default function FridgePage() {
         <div className="flex gap-0.5 bg-surface-overlay rounded-md p-0.5">
           <button
             onClick={() => setView("grid")}
+            aria-label="Grid view"
             className={`p-1.5 rounded transition-all ${view === "grid" ? "bg-gold-muted text-gold" : "text-text-muted"}`}
           >
             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -305,6 +290,7 @@ export default function FridgePage() {
           </button>
           <button
             onClick={() => setView("list")}
+            aria-label="List view"
             className={`p-1.5 rounded transition-all ${view === "list" ? "bg-gold-muted text-gold" : "text-text-muted"}`}
           >
             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -361,11 +347,7 @@ export default function FridgePage() {
       {!loading && filtered.length > 0 && view === "grid" && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           {filtered.map((wine) => (
-            <PremiumWineCard
-              key={wine.id}
-              wine={wine}
-              onConsume={() => openOne(wine)}
-            />
+            <PremiumWineCard key={wine.id} wine={wine} />
           ))}
         </div>
       )}
@@ -374,11 +356,7 @@ export default function FridgePage() {
       {!loading && filtered.length > 0 && view === "list" && (
         <div className="space-y-2">
           {filtered.map((wine) => (
-            <ListWineCard
-              key={wine.id}
-              wine={wine}
-              onConsume={() => openOne(wine)}
-            />
+            <ListWineCard key={wine.id} wine={wine} />
           ))}
         </div>
       )}
@@ -427,7 +405,7 @@ const BottleMicro = () => (
   </svg>
 );
 
-function PremiumWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => void }) {
+function PremiumWineCard({ wine }: { wine: Wine }) {
   const score = extractTopScore(wine.criticReviews) || (wine.onlineRating ? { score: Math.round(wine.onlineRating), source: "AI" } : null);
   const dotColor = colorDot(wine.color);
   const [labelFailed, setLabelFailed] = useState(false);
@@ -435,7 +413,7 @@ function PremiumWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => voi
   const src = photo || (wine.labelImageUrl && !labelFailed ? wine.labelImageUrl : null);
 
   return (
-    <div className="relative bg-surface-raised border border-border-subtle hover:border-gold/30 rounded-2xl overflow-hidden transition-all group">
+    <div className="bg-surface-raised border border-border-subtle hover:border-gold/30 rounded-2xl overflow-hidden transition-all">
       <Link href={`/wine/${wine.id}`} className="block p-3.5">
         {/* Top row: bottle image + actions */}
         <div className="relative h-[140px] -mx-1 mb-3 flex items-center justify-center">
@@ -505,28 +483,17 @@ function PremiumWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => voi
           </div>
         )}
       </Link>
-
-      {/* Quick consume on hover */}
-      <button
-        onClick={onConsume}
-        className="absolute top-2 left-2 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus:opacity-100 transition-opacity bg-gold/90 hover:bg-gold text-bg w-7 h-7 rounded-full flex items-center justify-center shadow-lg"
-        title="Open a bottle"
-      >
-        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-        </svg>
-      </button>
     </div>
   );
 }
 
-function ListWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => void }) {
+function ListWineCard({ wine }: { wine: Wine }) {
   const score = extractTopScore(wine.criticReviews) || (wine.onlineRating ? { score: Math.round(wine.onlineRating), source: "AI" } : null);
   const [labelFailed, setLabelFailed] = useState(false);
   const photo = winePhotoSrc(wine);
   const src = photo || (wine.labelImageUrl && !labelFailed ? wine.labelImageUrl : null);
   return (
-    <div className="bg-surface-raised border border-border-subtle hover:border-gold/30 rounded-2xl transition-all group flex">
+    <div className="bg-surface-raised border border-border-subtle hover:border-gold/30 rounded-2xl transition-all flex">
       <Link href={`/wine/${wine.id}`} className="flex-1 flex gap-3 p-3 min-w-0">
         <div className="w-14 h-20 flex-shrink-0 flex items-center justify-center">
           {src ? (
@@ -554,15 +521,6 @@ function ListWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => void }
           </div>
         </div>
       </Link>
-      <button
-        onClick={onConsume}
-        className="px-3 text-text-tertiary hover:text-gold transition-colors flex items-center"
-        title="Open a bottle"
-      >
-        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-        </svg>
-      </button>
     </div>
   );
 }
