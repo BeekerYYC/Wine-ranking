@@ -4,6 +4,8 @@ import {
   askForJson, arrayOf, hasApiKey, imageBlock, int, nullable, num, object, oneOf, str, toConfidence, toScore,
 } from "@/lib/claude";
 import { CATEGORIES, Category } from "@/lib/categories";
+import { boxInstruction, PixelBox, toFractionBox } from "@/lib/box";
+import { cropToBox, imageSize } from "@/lib/crop";
 
 // Each call reads one photo with Claude, which takes longer than the default
 // function budget.
@@ -80,11 +82,13 @@ function scanSchema(category: Category) {
       onlineRating: nullable(num),
       confidence: num,
       quantity: int,
+      box: nullable(object({ x0: int, y0: int, x1: int, y1: int })),
     })),
   });
 }
 
 interface ScannedItem {
+  box?: PixelBox | null;
   name: string;
   winery: string | null;
   vintage: number | null;
@@ -172,41 +176,49 @@ export async function POST(
   }
 
   try {
+    const sourceImage = pendingItem.imageData;
+    const size = await imageSize(sourceImage);
     const result = await askForJson<{ items: ScannedItem[] }>({
       content: [
-        imageBlock(pendingItem.imageData),
+        imageBlock(sourceImage),
         {
           type: "text",
-          text: `${SCAN_PROMPTS[category]}\n\nFor items where labels are partially obscured, do your best and set confidence lower. If you see no ${CATEGORIES[category].itemNamePlural} at all, return an empty list.`,
+          text: `${SCAN_PROMPTS[category]}${size ? `\n${boxInstruction(size.width, size.height)}` : ""}\n\nFor items where labels are partially obscured, do your best and set confidence lower. If you see no ${CATEGORIES[category].itemNamePlural} at all, return an empty list.`,
         },
       ],
       schema: scanSchema(category),
     });
     const bottles = result.items ?? [];
 
+    // Each item gets a photo of its own bottle, cropped out of the drawer shot
+    // at the box Claude marked. A whole-drawer photo on every bottle didn't help
+    // anyone find a particular one. Falls back to the full photo when there is
+    // no usable box, or when the bottle already fills most of the frame.
+    const photoFor = async (b: ScannedItem) => {
+      const box = size ? toFractionBox(b.box, size.width, size.height) : null;
+      return (box && (await cropToBox(sourceImage, box))) || sourceImage;
+    };
+
     if (bottles.length === 0) {
       await prisma.scanItem.update({ where: { id: pendingItem.id }, data: { status: "rejected" } });
     } else {
       const [first, ...rest] = bottles;
-      // Keep the source photo on every derived scan item so the reviewer can
-      // see what the AI was looking at and audit visually. Multi-bottle photos
-      // used to null this out to save DB space — but the user can't verify
-      // partial-visibility labels without the picture.
-      const sourceImage = pendingItem.imageData;
       await prisma.scanItem.update({
         where: { id: pendingItem.id },
-        data: { status: "analyzed", ...toScanItemData(first) },
+        data: { status: "analyzed", imageData: await photoFor(first), ...toScanItemData(first) },
       });
       if (rest.length > 0) {
-        await prisma.scanItem.createMany({
-          data: rest.map((b) => ({
+        const restData = [];
+        for (const b of rest) {
+          restData.push({
             batchId: id,
             sourceIndex: pendingItem.sourceIndex,
-            imageData: sourceImage,
+            imageData: await photoFor(b),
             status: "analyzed",
             ...toScanItemData(b),
-          })),
-        });
+          });
+        }
+        await prisma.scanItem.createMany({ data: restData });
       }
     }
 
