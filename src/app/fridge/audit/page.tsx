@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCategory } from "@/lib/CategoryContext";
 import { cropPhoto, resizePhoto } from "@/lib/photo";
@@ -58,6 +58,46 @@ export default function CellarAuditPage() {
   const [failedPhotos, setFailedPhotos] = useState<{ photo: number; reason: string }[]>([]);
   // Close-ups of each bottle cut from its drawer photo, keyed "mm-<wineId>" / "new-<index>".
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
+
+  // Bottles earlier audits logged as drunk, so a wrong one can be undone.
+  // Before the audit was fixed, a photo that failed to scan pre-set its whole
+  // shelf to "Mark consumed".
+  type AuditHistoryGroup = {
+    wineId: number; name: string; winery: string | null; vintage: number | null;
+    quantityNow: number; day: string; bottles: number; logIds: number[];
+  };
+  const [history, setHistory] = useState<AuditHistoryGroup[]>([]);
+  const [undoing, setUndoing] = useState<string | null>(null);
+  const [undoNote, setUndoNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (phase !== "input" && phase !== "done") return;
+    fetch(`/api/audit/history?category=${category}`)
+      .then((r) => (r.ok ? r.json() : { groups: [] }))
+      .then((d) => setHistory(Array.isArray(d.groups) ? d.groups : []))
+      .catch(() => setHistory([]));
+  }, [category, phase]);
+
+  const undoGroup = async (g: AuditHistoryGroup) => {
+    const key = `${g.wineId}|${g.day}`;
+    setUndoing(key);
+    setUndoNote(null);
+    try {
+      const res = await fetch("/api/audit/undo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logIds: g.logIds }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Undo failed");
+      setHistory((h) => h.filter((x) => `${x.wineId}|${x.day}` !== key));
+      setUndoNote(`Put ${g.bottles} bottle${g.bottles !== 1 ? "s" : ""} of ${g.name} back in your ${config.fridgeLabel.toLowerCase()}.`);
+    } catch (e) {
+      setUndoNote(e instanceof Error ? e.message : "Undo failed");
+    } finally {
+      setUndoing(null);
+    }
+  };
 
   const [resizing, setResizing] = useState({ done: 0, total: 0 });
 
@@ -324,6 +364,47 @@ export default function CellarAuditPage() {
           </div>
         )}
 
+        {undoNote && (
+          <div className="bg-success-muted/40 border border-success/15 rounded-xl p-3 mb-4">
+            <p className="text-[13px] text-success">{undoNote}</p>
+          </div>
+        )}
+
+        {history.length > 0 && (
+          <div className="bg-surface-raised border border-border-subtle rounded-xl mb-5 overflow-hidden">
+            <div className="px-4 py-3 border-b border-border-subtle">
+              <p className="text-[13px] font-medium text-text-primary">Bottles earlier audits marked as drunk</p>
+              <p className="text-[11px] text-text-tertiary mt-0.5">
+                If any of these are still in your {config.fridgeLabel.toLowerCase()}, undo them — they go back in and come off your drinking stats.
+              </p>
+            </div>
+            {history.map((g) => {
+              const key = `${g.wineId}|${g.day}`;
+              return (
+                <div key={key} className="px-4 py-2.5 border-b border-border-subtle last:border-b-0 flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] text-text-primary truncate">
+                      {g.name}
+                      <span className="text-text-tertiary">{[g.winery, g.vintage].filter(Boolean).length ? ` · ${[g.winery, g.vintage].filter(Boolean).join(" · ")}` : ""}</span>
+                    </p>
+                    <p className="text-[11px] text-text-muted">
+                      {g.bottles} bottle{g.bottles !== 1 ? "s" : ""} on {new Date(`${g.day}T12:00:00`).toLocaleDateString()} · {g.quantityNow} in stock now
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => undoGroup(g)}
+                    disabled={undoing !== null}
+                    className="flex-shrink-0 text-[12px] font-medium text-gold border border-gold/30 hover:bg-gold-muted px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {undoing === key ? "Undoing…" : "Undo"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         <div className="space-y-4">
           <div>
             <label className={labelClass}>Photos</label>
@@ -350,7 +431,7 @@ export default function CellarAuditPage() {
                     <button
                       type="button"
                       onClick={() => removePhoto(i)}
-                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-bg/80 text-text-secondary flex items-center justify-center text-xs hover:text-text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-bg/80 text-text-secondary flex items-center justify-center text-xs hover:text-text-primary [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus:opacity-100 transition-opacity"
                     >×</button>
                     <div className="absolute bottom-1 left-1 text-[10px] bg-bg/70 text-text-secondary px-1 rounded">{i + 1}</div>
                   </div>
