@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ReviewBell } from "@/components/DrinkFlow";
 import { useCategory } from "@/lib/CategoryContext";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from "recharts";
 import WineImage from "@/components/WineImage";
@@ -54,6 +57,11 @@ export default function Home() {
   const { category, config } = useCategory();
   const [wines, setWines] = useState<Wine[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [craving, setCraving] = useState("");
+  const router = useRouter();
+  const findWine = (text: string) => {
+    if (text.trim()) router.push(`/fridge/drink?q=${encodeURIComponent(text.trim())}`);
+  };
 
   useEffect(() => {
     fetch(`/api/wines?category=${category}&sort=createdAt&order=desc`)
@@ -98,20 +106,56 @@ export default function Home() {
           </h1>
           <p className="text-[13px] text-text-tertiary mt-1">Here&apos;s what&apos;s happening in your wine world.</p>
         </div>
-        <button className="relative w-10 h-10 rounded-full bg-surface-raised border border-border-subtle flex items-center justify-center text-text-tertiary hover:text-text-secondary transition-colors">
-          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-          </svg>
-          {newThisWeek > 0 && (
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-pink" />
-          )}
-        </button>
+        {/* Opened bottles waiting for a rating; tap to rate them. */}
+        <ReviewBell />
       </div>
 
-      {/* Two feature cards */}
+      {/* The everyday job: what are you eating → which bottle. */}
+      <form
+        onSubmit={(e) => { e.preventDefault(); findWine(craving); }}
+        className="rounded-2xl border border-gold/25 p-5"
+        style={{ background: "linear-gradient(135deg, rgba(212,184,122,0.12) 0%, rgba(183,58,94,0.12) 55%, rgba(20,12,16,0.6) 100%)" }}
+      >
+        <label htmlFor="craving" className="block font-serif text-[22px] sm:text-[24px] font-semibold leading-tight">
+          {config.drinkPrompt}
+        </label>
+        <p className="text-[12.5px] text-text-tertiary mt-1 mb-3">Tell me what you&apos;re eating — I&apos;ll pick a bottle from your {config.fridgeLabel.toLowerCase()}.</p>
+        <div className="flex gap-2">
+          <input
+            id="craving"
+            type="text"
+            value={craving}
+            onChange={(e) => setCraving(e.target.value)}
+            placeholder={category === "wine" ? "Lamb chops with rosemary…" : category === "coffee" ? "Something strong to wake up…" : "Tacos tonight…"}
+            enterKeyHint="search"
+            // 16px stops iOS zooming the page when the field is focused.
+            className="flex-1 min-w-0 px-4 py-3 rounded-xl bg-bg/60 border border-border-subtle text-[16px] text-text-primary placeholder-text-muted focus:outline-none focus:border-gold/40 focus:ring-1 focus:ring-gold/20 transition-all"
+          />
+          <button
+            type="submit"
+            disabled={!craving.trim()}
+            className="bg-gold/90 hover:bg-gold disabled:opacity-40 text-bg px-5 rounded-xl text-[14px] font-semibold transition-all"
+          >
+            Find
+          </button>
+        </div>
+        <div className="flex gap-2 overflow-x-auto no-scrollbar mt-3 -mx-1 px-1 pb-0.5">
+          {config.quickPrompts.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => findWine(p.value)}
+              className="flex-shrink-0 bg-surface-raised/80 hover:bg-surface-overlay border border-border-subtle rounded-full px-3 py-1.5 text-[12.5px] text-text-secondary hover:text-gold transition-all"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </form>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* Fridge card */}
-        <a
+        <Link
           href="/fridge"
           className="relative overflow-hidden rounded-2xl border border-border-subtle p-5 group transition-all hover:border-gold/30"
           style={{
@@ -141,33 +185,24 @@ export default function Home() {
               />
             ))}
           </div>
-        </a>
+        </Link>
 
-        {/* Scan & Add card */}
-        <a
+        {/* Restocking happens every couple of months — a small card, not a hero. */}
+        <Link
           href="/fridge/scan"
-          className="relative overflow-hidden rounded-2xl border border-gold/20 p-5 group transition-all hover:border-gold/40"
-          style={{
-            background: "linear-gradient(135deg, rgba(212,184,122,0.1) 0%, rgba(183,58,94,0.08) 60%, rgba(20,12,16,0.6) 100%)",
-          }}
+          className="rounded-2xl border border-border-subtle p-5 flex items-center gap-4 transition-all hover:border-gold/30 bg-surface-raised"
         >
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-cream">✨</span>
-              <span className="font-serif text-[18px] font-semibold">Scan & Add</span>
-            </div>
-            <p className="text-[12px] text-text-secondary leading-relaxed mb-4 max-w-[200px]">
-              Snap a photo of your wine collection and let AI identify & enrich your wines.
-            </p>
-            <div className="inline-flex items-center gap-1.5 bg-cream/15 hover:bg-cream/25 text-cream border border-cream/20 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all">
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.66-.9l.82-1.2A2 2 0 0110.07 4h3.86a2 2 0 011.66.9l.82 1.2a2 2 0 001.66.9H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                <circle cx="12" cy="13" r="4" />
-              </svg>
-              Scan Cellar
-            </div>
+          <div className="w-11 h-11 rounded-xl bg-gold-muted flex items-center justify-center text-gold flex-shrink-0">
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.66-.9l.82-1.2A2 2 0 0110.07 4h3.86a2 2 0 011.66.9l.82 1.2a2 2 0 001.66.9H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
           </div>
-        </a>
+          <div className="min-w-0">
+            <p className="text-[14px] font-semibold text-text-primary">Bought wine?</p>
+            <p className="text-[12px] text-text-tertiary">Scan your drawers to add the bottles.</p>
+          </div>
+        </Link>
       </div>
 
       {/* Recently Added */}
@@ -175,16 +210,16 @@ export default function Home() {
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-serif text-[20px] font-semibold">Recently Added</h2>
-            <a href="/fridge" className="text-[12px] text-text-tertiary hover:text-gold transition-colors flex items-center gap-1">
+            <Link href="/fridge" className="text-[12px] text-text-tertiary hover:text-gold transition-colors flex items-center gap-1">
               See all
               <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
-            </a>
+            </Link>
           </div>
           <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1 -mx-4 px-4">
             {recentlyAdded.map((wine) => (
-              <a
+              <Link
                 key={wine.id}
                 href={`/wine/${wine.id}`}
                 className="flex-shrink-0 w-[180px] rounded-2xl overflow-hidden bg-surface-raised border border-border-subtle hover:border-gold/30 transition-all group"
@@ -214,7 +249,7 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-              </a>
+              </Link>
             ))}
           </div>
         </div>
@@ -225,12 +260,12 @@ export default function Home() {
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-serif text-[20px] font-semibold">Your Wine Insights</h2>
-            <a href="/dashboard" className="text-[12px] text-text-tertiary hover:text-gold transition-colors flex items-center gap-1">
+            <Link href="/dashboard" className="text-[12px] text-text-tertiary hover:text-gold transition-colors flex items-center gap-1">
               See all
               <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
-            </a>
+            </Link>
           </div>
 
           <div className="bg-surface-raised border border-border-subtle rounded-2xl p-4 mb-3">
@@ -298,38 +333,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Discover with AI */}
-      <a
-        href="/fridge/drink"
-        className="relative overflow-hidden rounded-2xl border border-gold/20 p-5 block transition-all hover:border-gold/40"
-        style={{
-          background: "linear-gradient(135deg, rgba(212,184,122,0.12) 0%, rgba(183,58,94,0.1) 50%, rgba(20,12,16,0.6) 100%)",
-        }}
-      >
-        <div className="relative z-10 max-w-[60%]">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-cream">✨</span>
-            <h3 className="font-serif text-[18px] font-semibold">Discover with AI</h3>
-          </div>
-          <p className="text-[12px] text-text-secondary leading-relaxed mb-3">
-            Get personalized wine recommendations based on your taste and collection.
-          </p>
-          <div className="inline-flex items-center gap-1.5 bg-cream/15 hover:bg-cream/25 text-cream border border-cream/20 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all">
-            Get Recommendations
-            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </div>
-        </div>
-        {/* Decorative wine glass illustration */}
-        <div className="absolute right-4 bottom-0 top-0 w-32 flex items-center justify-end opacity-30 pointer-events-none">
-          <svg width="80" height="100" viewBox="0 0 80 100" fill="none">
-            <path d="M20 10 Q20 35 40 40 Q60 35 60 10 Z" fill="#b73a5e" opacity="0.6" />
-            <path d="M40 40 L40 80" stroke="#d4b87a" strokeWidth="2" />
-            <path d="M25 88 L55 88" stroke="#d4b87a" strokeWidth="2" />
-          </svg>
-        </div>
-      </a>
     </div>
   );
 }

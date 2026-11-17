@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useId, useMemo, useState } from "react";
 import { useCategory } from "@/lib/CategoryContext";
 import { normalizeColor } from "@/lib/colors";
 import { winePhotoSrc, wineHasNoImage } from "@/lib/wineImage";
-import ConsumeModal from "@/components/ConsumeModal";
+import { useDrinkFlow } from "@/components/DrinkFlow";
+import MoreMenu from "@/components/MoreMenu";
 import FindLabelsModal from "@/components/FindLabelsModal";
 import EnrichAllModal from "@/components/EnrichAllModal";
 
@@ -74,7 +76,7 @@ export default function FridgePage() {
   const [colorFilter, setColorFilter] = useState<string>("");
   const [sort, setSort] = useState<"createdAt" | "rating" | "name">("createdAt");
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [consumeWine, setConsumeWine] = useState<Wine | null>(null);
+  const { openBottle } = useDrinkFlow();
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [missingImageCount, setMissingImageCount] = useState(0);
@@ -140,16 +142,37 @@ export default function FridgePage() {
 
   const totalBottles = wines.reduce((s, w) => s + w.quantity, 0);
 
-  const handleConsume = async (data: { rating?: number; notes?: string }) => {
-    if (!consumeWine) return;
-    await fetch(`/api/wines/${consumeWine.id}/consume`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    setConsumeWine(null);
-    fetchWines();
+  // One tap opens a bottle; the rating comes later from the review queue (an
+  // "Enjoy" message with Undo covers a mis-tap). This used to open a rating form
+  // for a bottle that had only just been opened.
+  const openOne = async (wine: Wine) => {
+    try {
+      await openBottle({ id: wine.id, name: wine.name });
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Couldn't open that bottle");
+    }
   };
+
+  // Keep the shelf in step with opens and undos from anywhere in the app.
+  useEffect(() => {
+    const onChanged = (e: Event) => {
+      const w = (e as CustomEvent).detail as { id?: number; quantity?: number; status?: string };
+      if (!w?.id || typeof w.quantity !== "number") return;
+      setWines((list) => {
+        const inList = list.some((x) => x.id === w.id);
+        if (!inList) {
+          if (w.quantity! > 0) fetchWines(); // an undo brought an emptied wine back
+          return list;
+        }
+        return list
+          .map((x) => (x.id === w.id ? { ...x, quantity: w.quantity! } : x))
+          .filter((x) => x.quantity > 0);
+      });
+    };
+    window.addEventListener("wine-changed", onChanged);
+    return () => window.removeEventListener("wine-changed", onChanged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sort, category]);
 
   // Filter pills - show top types
   const topTypes = config.types.slice(0, 3);
@@ -202,7 +225,7 @@ export default function FridgePage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </button>
-          <a
+          <Link
             href="/fridge/audit"
             title="Audit cellar against photos"
             className="w-10 h-10 rounded-xl bg-surface-raised border border-border-subtle flex items-center justify-center text-text-tertiary hover:text-gold hover:border-gold/30 transition-all"
@@ -210,7 +233,8 @@ export default function FridgePage() {
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-          </a>
+          </Link>
+          <MoreMenu />
         </div>
       </div>
 
@@ -326,9 +350,9 @@ export default function FridgePage() {
             {wines.length === 0 ? `Scan your ${config.itemNamePlural} to stock up` : "Try a different filter"}
           </p>
           {wines.length === 0 && (
-            <a href="/fridge/scan" className="inline-flex items-center gap-2 bg-gradient-to-br from-gold to-gold-light text-bg px-5 py-2.5 rounded-xl text-[13px] font-semibold transition-all shadow-lg shadow-gold/20">
+            <Link href="/fridge/scan" className="inline-flex items-center gap-2 bg-gradient-to-br from-gold to-gold-light text-bg px-5 py-2.5 rounded-xl text-[13px] font-semibold transition-all shadow-lg shadow-gold/20">
               {config.scanLabel}
-            </a>
+            </Link>
           )}
         </div>
       )}
@@ -340,7 +364,7 @@ export default function FridgePage() {
             <PremiumWineCard
               key={wine.id}
               wine={wine}
-              onConsume={() => setConsumeWine(wine)}
+              onConsume={() => openOne(wine)}
             />
           ))}
         </div>
@@ -353,15 +377,12 @@ export default function FridgePage() {
             <ListWineCard
               key={wine.id}
               wine={wine}
-              onConsume={() => setConsumeWine(wine)}
+              onConsume={() => openOne(wine)}
             />
           ))}
         </div>
       )}
 
-      {consumeWine && (
-        <ConsumeModal wine={consumeWine} onConfirm={handleConsume} onClose={() => setConsumeWine(null)} />
-      )}
 
       {showFindLabels && (
         <FindLabelsModal
@@ -415,7 +436,7 @@ function PremiumWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => voi
 
   return (
     <div className="relative bg-surface-raised border border-border-subtle hover:border-gold/30 rounded-2xl overflow-hidden transition-all group">
-      <a href={`/wine/${wine.id}`} className="block p-3.5">
+      <Link href={`/wine/${wine.id}`} className="block p-3.5">
         {/* Top row: bottle image + actions */}
         <div className="relative h-[140px] -mx-1 mb-3 flex items-center justify-center">
           {src ? (
@@ -428,15 +449,6 @@ function PremiumWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => voi
           ) : (
             <BottleSilhouette color={dotColor} />
           )}
-          <button
-            onClick={(e) => { e.preventDefault(); /* favorite toggle - placeholder */ }}
-            className="absolute top-0 right-0 w-7 h-7 rounded-full bg-bg/60 backdrop-blur-sm flex items-center justify-center text-text-muted hover:text-pink transition-colors"
-            aria-label="Favorite"
-          >
-            <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-            </svg>
-          </button>
         </div>
 
         {/* Name (serif) */}
@@ -492,12 +504,12 @@ function PremiumWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => voi
             </span>
           </div>
         )}
-      </a>
+      </Link>
 
       {/* Quick consume on hover */}
       <button
         onClick={onConsume}
-        className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity bg-gold/90 hover:bg-gold text-bg w-7 h-7 rounded-full flex items-center justify-center shadow-lg"
+        className="absolute top-2 left-2 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus:opacity-100 transition-opacity bg-gold/90 hover:bg-gold text-bg w-7 h-7 rounded-full flex items-center justify-center shadow-lg"
         title="Open a bottle"
       >
         <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -515,7 +527,7 @@ function ListWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => void }
   const src = photo || (wine.labelImageUrl && !labelFailed ? wine.labelImageUrl : null);
   return (
     <div className="bg-surface-raised border border-border-subtle hover:border-gold/30 rounded-2xl transition-all group flex">
-      <a href={`/wine/${wine.id}`} className="flex-1 flex gap-3 p-3 min-w-0">
+      <Link href={`/wine/${wine.id}`} className="flex-1 flex gap-3 p-3 min-w-0">
         <div className="w-14 h-20 flex-shrink-0 flex items-center justify-center">
           {src ? (
             <img src={src} alt={wine.name} className="h-full object-contain" onError={() => { if (!photo) setLabelFailed(true); }} />
@@ -541,7 +553,7 @@ function ListWineCard({ wine, onConsume }: { wine: Wine; onConsume: () => void }
             )}
           </div>
         </div>
-      </a>
+      </Link>
       <button
         onClick={onConsume}
         className="px-3 text-text-tertiary hover:text-gold transition-colors flex items-center"

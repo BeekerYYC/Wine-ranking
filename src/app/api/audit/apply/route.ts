@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { AUDIT_CONSUMED_NOTE } from "@/lib/audit";
 
 interface ApplyAction {
   type: "decrement" | "increment" | "create" | "ignore";
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
       // Log each missing bottle as a consumption event so dashboard stats stay honest.
       for (let i = 0; i < consumedDelta; i++) {
         await prisma.consumptionLog.create({
-          data: { wineId: wine.id, notes: "Marked consumed via cellar audit" },
+          data: { wineId: wine.id, notes: AUDIT_CONSUMED_NOTE },
         });
       }
       const updated = await prisma.wine.update({

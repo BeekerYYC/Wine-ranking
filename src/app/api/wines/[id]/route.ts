@@ -86,6 +86,21 @@ export async function PUT(
   // Remove undefined values
   Object.keys(data).forEach((k) => data[k] === undefined && delete data[k]);
 
+  // Taking the last bottle out of the cellar (the quantity stepper going to 0)
+  // makes the wine consumed here, when it happens. The cellar only lists
+  // bottles with quantity > 0, so a zero-quantity "collection" row is invisible;
+  // the Insights page used to repair those with a database write on every visit.
+  if (data.quantity === 0) {
+    const current = await prisma.wine.findUnique({
+      where: { id: parseInt(id) },
+      select: { status: true, consumedAt: true },
+    });
+    if (current && (data.status ?? current.status) === "collection") {
+      data.status = "consumed";
+      if (!current.consumedAt) data.consumedAt = new Date();
+    }
+  }
+
   const wine = await prisma.wine.update({
     where: { id: parseInt(id) },
     data,

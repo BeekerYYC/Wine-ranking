@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { enrichWine } from "@/lib/enrich";
+import { idsWithPhoto, WINE_WITHOUT_PHOTO } from "@/lib/wineSelect";
 
 // Fields the list can be sorted by, and whether each can be empty.
 const SORTABLE: Record<string, boolean> = {
@@ -65,20 +66,20 @@ export async function GET(req: NextRequest) {
     ? [{ [sortField]: { sort: direction, nulls: "last" } }, { createdAt: "desc" }]
     : [{ [sortField]: direction }];
 
-  const wines = await prisma.wine.findMany({
-    where,
-    orderBy: orderBy as Prisma.WineOrderByWithRelationInput[],
-    include: { store: true, list: true },
-  });
-
-  // Never inline the base64 photos in a list response — ~175 KB per bottle blows
+  // Never load or inline the base64 photos for a list — ~175 KB per bottle blows
   // past the 4.5 MB serverless response limit at ~25 photographed bottles and
   // takes the entire cellar down with it. Clients load images from
   // /api/wines/[id]/image via the `hasImage` flag (see src/lib/wineImage.ts).
-  const list = wines.map(({ imageData, ...wine }) => ({
-    ...wine,
-    hasImage: !!imageData,
-  }));
+  const [wines, withPhoto] = await Promise.all([
+    prisma.wine.findMany({
+      where,
+      orderBy: orderBy as Prisma.WineOrderByWithRelationInput[],
+      select: { ...WINE_WITHOUT_PHOTO, store: true, list: true },
+    }),
+    idsWithPhoto(where as Prisma.WineWhereInput),
+  ]);
+
+  const list = wines.map((wine) => ({ ...wine, hasImage: withPhoto.has(wine.id) }));
 
   return NextResponse.json(list);
 }

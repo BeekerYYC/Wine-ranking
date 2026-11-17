@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import StarRating from "@/components/StarRating";
-import ConsumeModal from "@/components/ConsumeModal";
+import { useDrinkFlow } from "@/components/DrinkFlow";
 import { useCategory } from "@/lib/CategoryContext";
 
 interface ConsumptionEntry {
@@ -47,7 +47,9 @@ export default function WineDetail() {
   const [priceError, setPriceError] = useState<string | null>(null);
   const [enriching, setEnriching] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
-  const [showConsume, setShowConsume] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const [openError, setOpenError] = useState<string | null>(null);
+  const { openBottle } = useDrinkFlow();
 
   useEffect(() => {
     fetch(`/api/wines/${id}`).then((r) => r.json()).then((w) => {
@@ -77,20 +79,36 @@ export default function WineDetail() {
     setWine({ ...wine, status });
   };
 
-  const handleConsume = async (data: { rating?: number; notes?: string }) => {
+  // One tap opens a bottle; you're asked for a rating later (review queue).
+  const handleOpen = async () => {
     if (!wine) return;
-    const res = await fetch(`/api/wines/${id}/consume`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const updated = await res.json();
-    setWine(updated);
-    setQuantity(updated.quantity);
-    if (data.rating) setRating(data.rating);
-    if (data.notes) setNotes(data.notes);
-    setShowConsume(false);
+    setOpening(true);
+    setOpenError(null);
+    try {
+      await openBottle({ id: wine.id, name: wine.name }); // page updates via "wine-changed"
+    } catch (e) {
+      setOpenError(e instanceof Error ? e.message : "Couldn't open that bottle");
+    } finally {
+      setOpening(false);
+    }
   };
+
+  // Follow opens/undos (from here, the toast's Undo, or the review queue).
+  useEffect(() => {
+    const onChanged = (e: Event) => {
+      const w = (e as CustomEvent).detail as Partial<Wine> & { id?: number };
+      if (!w || w.id !== Number(id)) return;
+      if (typeof w.quantity === "number" && "name" in w) {
+        setWine(w as Wine);
+        setQuantity(w.quantity);
+      } else if (typeof w.rating === "number") {
+        setWine((cur) => (cur ? { ...cur, rating: w.rating } : cur));
+        setRating(w.rating);
+      }
+    };
+    window.addEventListener("wine-changed", onChanged);
+    return () => window.removeEventListener("wine-changed", onChanged);
+  }, [id]);
 
   const handleFindImage = async () => {
     setFindingImage(true);
@@ -145,7 +163,14 @@ export default function WineDetail() {
   const handleDelete = async () => {
     if (!confirm(`Delete this ${config.itemName}?`)) return;
     await fetch(`/api/wines/${id}`, { method: "DELETE" });
-    router.push("/");
+    router.push("/fridge");
+  };
+
+  // Back to wherever the wine was opened from (cellar, pairing, insights…);
+  // the cellar when there's nowhere to go back to. This used to always go Home.
+  const goBack = () => {
+    if (window.history.length > 1) router.back();
+    else router.push("/fridge");
   };
 
   const typeEntry = config.types.find((t) => t.value === wine?.color);
@@ -167,11 +192,11 @@ export default function WineDetail() {
 
   return (
     <div className="max-w-lg mx-auto">
-      <button onClick={() => router.push("/")} className="text-text-muted hover:text-text-secondary text-[12px] mb-5 inline-flex items-center gap-1.5 transition-colors">
+      <button onClick={goBack} className="text-text-muted hover:text-text-secondary text-[12px] mb-5 inline-flex items-center gap-1.5 transition-colors">
         <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
-        Back to collection
+        Back
       </button>
 
       {(wine.imageData || wine.labelImageUrl) ? (
@@ -316,10 +341,11 @@ export default function WineDetail() {
         {wine.list && <p className="text-[11px] text-text-muted mt-1">List: <span className="text-text-tertiary">{wine.list.name}</span></p>}
         {wine.consumedAt && <p className="text-[11px] text-text-muted mt-2">Last opened {new Date(wine.consumedAt).toLocaleDateString()}</p>}
         {quantity > 0 && wine.status !== "consumed" && (
-          <button onClick={() => setShowConsume(true)} className="mt-3 w-full bg-gold-muted hover:bg-gold/20 text-gold border border-gold/15 py-2 rounded-lg text-[12px] font-semibold transition-all">
-            {config.consumeVerb}
+          <button onClick={handleOpen} disabled={opening} className="mt-3 w-full bg-gold/90 hover:bg-gold disabled:opacity-60 text-bg py-2.5 rounded-lg text-[13px] font-semibold transition-all">
+            {opening ? "Opening…" : config.consumeVerb}
           </button>
         )}
+        {openError && <p className="text-[12px] text-danger mt-2">{openError}</p>}
       </section>
 
       <section className="bg-surface-raised rounded-xl border border-border-subtle p-4 mb-2.5">
@@ -471,10 +497,6 @@ export default function WineDetail() {
         <p className="text-[11px] text-text-muted">Added {new Date(wine.createdAt).toLocaleDateString()}</p>
         <button onClick={handleDelete} className="text-danger/50 hover:text-danger text-[12px] font-medium transition-colors">Delete {config.itemName}</button>
       </div>
-
-      {showConsume && wine && (
-        <ConsumeModal wine={wine} onConfirm={handleConsume} onClose={() => setShowConsume(false)} />
-      )}
     </div>
   );
 }

@@ -101,12 +101,25 @@ model WineList {
 }
 
 model ConsumptionLog {
-  id        Int      @id @default(autoincrement())
-  wineId    Int
-  wine      Wine     @relation(fields: [wineId], references: [id], onDelete: Cascade)
-  rating    Int?     // optional rating for this specific bottle
-  notes     String?
-  createdAt DateTime @default(now())
+  id            Int            @id @default(autoincrement())
+  wineId        Int
+  wine          Wine           @relation(fields: [wineId], references: [id], onDelete: Cascade)
+  rating        Int?           // optional rating for this specific bottle
+  notes         String?
+  createdAt     DateTime       @default(now())
+  pendingReview PendingReview? // relation only — no column on this table
+}
+
+// A bottle that was opened and hasn't been rated yet. The app asks for a
+// rating on a later visit, one bottle at a time, until it's rated or dismissed
+// (which deletes the row). Kept in its own table so adding it doesn't change
+// ConsumptionLog: code that predates it, or a preview build against a database
+// without it, keeps working.
+model PendingReview {
+  id        Int            @id @default(autoincrement())
+  logId     Int            @unique
+  log       ConsumptionLog @relation(fields: [logId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
 }
 
 model Achievement {
