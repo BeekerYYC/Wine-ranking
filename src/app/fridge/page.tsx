@@ -471,17 +471,18 @@ function PremiumWineCard({ wine }: { wine: Wine }) {
           </div>
         )}
 
-        {/* Drink window */}
-        {(wine.drinkingWindow || wine.quantity > 0) && (
-          <div className="flex items-center gap-1.5 text-[11px] text-pink mt-2 pt-2 border-t border-border-subtle">
-            <svg width="11" height="11" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-            </svg>
-            <span className="truncate">
-              {wine.drinkingWindow || `${wine.quantity} bottle${wine.quantity !== 1 ? "s" : ""} in stock`}
-            </span>
-          </div>
-        )}
+        {/* Drink window + inventory */}
+        <div className="flex items-center justify-between gap-2 text-[11px] mt-2 pt-2 border-t border-border-subtle">
+          {wine.drinkingWindow ? (
+            <div className="flex items-center gap-1.5 text-pink min-w-0">
+              <svg width="11" height="11" fill="currentColor" viewBox="0 0 24 24" className="flex-shrink-0">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+              </svg>
+              <span className="truncate">{wine.drinkingWindow}</span>
+            </div>
+          ) : <span />}
+          <QuantityPill quantity={wine.quantity} />
+        </div>
       </Link>
     </div>
   );
@@ -518,10 +519,26 @@ function ListWineCard({ wine }: { wine: Wine }) {
                 {score.score}<span className="font-medium opacity-60 ml-0.5">{score.source}</span>
               </span>
             )}
+            <span className="ml-auto flex-shrink-0"><QuantityPill quantity={wine.quantity} /></span>
           </div>
         </div>
       </Link>
     </div>
+  );
+}
+
+function QuantityPill({ quantity }: { quantity: number }) {
+  const low = quantity <= 1;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium tabular-nums ${
+        low ? "bg-gold-muted text-gold" : "bg-surface-overlay text-text-secondary"
+      }`}
+      title={`${quantity} bottle${quantity !== 1 ? "s" : ""} left`}
+    >
+      <BottleMicro />
+      {quantity} left
+    </span>
   );
 }
 
