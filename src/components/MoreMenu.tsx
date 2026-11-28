@@ -21,7 +21,18 @@ const ITEMS: { href: string; label: string; download?: boolean }[] = [
 
 export default function MoreMenu() {
   const [open, setOpen] = useState(false);
+  // Which edge of the button the menu lines up with. On a phone the button sits
+  // at the left of its row, and a right-aligned menu opened off-screen.
+  const [alignLeft, setAlignLeft] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  const toggle = () => {
+    if (!open && ref.current) {
+      const MENU_WIDTH = 208; // w-52
+      setAlignLeft(ref.current.getBoundingClientRect().right < MENU_WIDTH + 8);
+    }
+    setOpen((o) => !o);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -43,7 +54,7 @@ export default function MoreMenu() {
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
         aria-label="More"
         aria-expanded={open}
         className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${
@@ -55,7 +66,7 @@ export default function MoreMenu() {
         </svg>
       </button>
       {open && (
-        <div className="absolute right-0 top-12 z-40 w-52 bg-surface-raised border border-border rounded-xl shadow-2xl overflow-hidden py-1">
+        <div className={`absolute ${alignLeft ? "left-0" : "right-0"} top-12 z-40 w-52 bg-surface-raised border border-border rounded-xl shadow-2xl overflow-hidden py-1`}>
           {ITEMS.map((item) =>
             item.download ? (
               <a key={item.href} href={item.href} download className={itemClass} onClick={() => setOpen(false)}>
