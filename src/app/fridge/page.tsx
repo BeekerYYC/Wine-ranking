@@ -8,6 +8,7 @@ import { winePhotoSrc, wineHasNoImage } from "@/lib/wineImage";
 import MoreMenu from "@/components/MoreMenu";
 import FindLabelsModal from "@/components/FindLabelsModal";
 import EnrichAllModal from "@/components/EnrichAllModal";
+import { sortCellar, SORT_OPTIONS, FLIPPABLE, type SortKey, type SortDir } from "@/lib/cellarSort";
 
 interface Wine {
   id: number;
@@ -73,7 +74,8 @@ export default function FridgePage() {
   const [wines, setWines] = useState<Wine[]>([]);
   const [loading, setLoading] = useState(true);
   const [colorFilter, setColorFilter] = useState<string>("");
-  const [sort, setSort] = useState<"createdAt" | "rating" | "name">("createdAt");
+  const [sort, setSort] = useState<SortKey>("recent");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
@@ -86,7 +88,8 @@ export default function FridgePage() {
   const fetchWines = () => {
     setLoading(true);
     setError(null);
-    fetch(`/api/wines?category=${category}&status=collection&sort=${sort}&order=${sort === "name" ? "asc" : "desc"}`)
+    // Always fetched newest first; every other order is applied in sortCellar.
+    fetch(`/api/wines?category=${category}&status=collection&sort=createdAt&order=desc`)
       .then(async (r) => {
         // Surface failures instead of rendering an empty cellar: a failed load
         // used to be indistinguishable from "you own no wine".
@@ -112,7 +115,27 @@ export default function FridgePage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(fetchWines, [sort, category]);
+  useEffect(fetchWines, [category]);
+
+  // Remember the chosen sort on this device.
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("cellar-sort") || "null");
+      if (saved && SORT_OPTIONS.some((o) => o.key === saved.key)) {
+        setSort(saved.key);
+        setSortDir(saved.dir === "asc" ? "asc" : "desc");
+      }
+    } catch {}
+  }, []);
+
+  const chooseSort = (key: SortKey) => {
+    let dir: SortDir;
+    if (key === sort && FLIPPABLE.includes(key)) dir = sortDir === "asc" ? "desc" : "asc";
+    else dir = SORT_OPTIONS.find((o) => o.key === key)!.defaultDir;
+    setSort(key);
+    setSortDir(dir);
+    try { localStorage.setItem("cellar-sort", JSON.stringify({ key, dir })); } catch {}
+  };
 
   const filtered = useMemo(() => {
     return wines.filter((w) => {
@@ -125,6 +148,8 @@ export default function FridgePage() {
       return true;
     });
   }, [wines, colorFilter, search]);
+
+  const sections = useMemo(() => sortCellar(filtered, sort, sortDir), [filtered, sort, sortDir]);
 
   const counts = useMemo(() => {
     const result: Record<string, number> = {
@@ -161,7 +186,7 @@ export default function FridgePage() {
     window.addEventListener("wine-changed", onChanged);
     return () => window.removeEventListener("wine-changed", onChanged);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort, category]);
+  }, [category]);
 
   // Filter pills - show top types
   const topTypes = config.types.slice(0, 3);
@@ -219,6 +244,26 @@ export default function FridgePage() {
           </button>
           {/* Audit cellar lives in this menu, next to the other restocking tools. */}
           <MoreMenu />
+        <div className="h-10 flex-shrink-0 flex items-center gap-0.5 bg-surface-raised border border-border-subtle rounded-xl p-1">
+          <button
+            onClick={() => setView("grid")}
+            aria-label="Grid view"
+            className={`p-1.5 rounded-lg transition-all ${view === "grid" ? "bg-gold-muted text-gold" : "text-text-muted"}`}
+          >
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h6v6H4zM14 5h6v6h-6zM4 13h6v6H4zM14 13h6v6h-6z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setView("list")}
+            aria-label="List view"
+            className={`p-1.5 rounded-lg transition-all ${view === "list" ? "bg-gold-muted text-gold" : "text-text-muted"}`}
+          >
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
         </div>
       </div>
 
@@ -264,40 +309,27 @@ export default function FridgePage() {
         ))}
       </div>
 
-      {/* Sort + view */}
-      <div className="flex items-center justify-between bg-surface-raised border border-border-subtle rounded-xl px-3 py-2">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-text-muted">Sort by</span>
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as "createdAt" | "rating" | "name")}
-            className="bg-transparent text-[12px] font-medium text-text-primary focus:outline-none cursor-pointer"
-          >
-            <option value="createdAt">Recently Added</option>
-            <option value="rating">Top Rated</option>
-            <option value="name">Name</option>
-          </select>
-        </div>
-        <div className="flex gap-0.5 bg-surface-overlay rounded-md p-0.5">
-          <button
-            onClick={() => setView("grid")}
-            aria-label="Grid view"
-            className={`p-1.5 rounded transition-all ${view === "grid" ? "bg-gold-muted text-gold" : "text-text-muted"}`}
-          >
-            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h6v6H4zM14 5h6v6h-6zM4 13h6v6H4zM14 13h6v6h-6z" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setView("list")}
-            aria-label="List view"
-            className={`p-1.5 rounded transition-all ${view === "list" ? "bg-gold-muted text-gold" : "text-text-muted"}`}
-          >
-            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-        </div>
+      {/* Sort pills — tap Score or Price again to reverse */}
+      <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-4 px-4">
+        {SORT_OPTIONS.map((o) => {
+          const active = sort === o.key;
+          const arrow = active && FLIPPABLE.includes(o.key) ? (sortDir === "asc" ? " ↑" : " ↓") : "";
+          return (
+            <button
+              key={o.key}
+              onClick={() => chooseSort(o.key)}
+              aria-pressed={active}
+              title={FLIPPABLE.includes(o.key) ? "Tap again to reverse" : undefined}
+              className={`px-3 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap border transition-all ${
+                active
+                  ? "bg-gold-muted border-gold/30 text-gold"
+                  : "bg-transparent border-border-subtle text-text-tertiary hover:text-text-secondary"
+              }`}
+            >
+              {o.label}{arrow}
+            </button>
+          );
+        })}
       </div>
 
       {/* Loading */}
@@ -345,18 +377,32 @@ export default function FridgePage() {
 
       {/* Grid view */}
       {!loading && filtered.length > 0 && view === "grid" && (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-          {filtered.map((wine) => (
-            <PremiumWineCard key={wine.id} wine={wine} />
+        <div className="space-y-5">
+          {sections.map((sec) => (
+            <section key={sec.title ?? "all"}>
+              {sec.title && <SectionHeader title={sec.title} wines={sec.wines} />}
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {sec.wines.map((wine) => (
+                  <PremiumWineCard key={wine.id} wine={wine} />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
 
       {/* List view */}
       {!loading && filtered.length > 0 && view === "list" && (
-        <div className="space-y-2">
-          {filtered.map((wine) => (
-            <ListWineCard key={wine.id} wine={wine} />
+        <div className="space-y-5">
+          {sections.map((sec) => (
+            <section key={sec.title ?? "all"}>
+              {sec.title && <SectionHeader title={sec.title} wines={sec.wines} />}
+              <div className="space-y-2">
+                {sec.wines.map((wine) => (
+                  <ListWineCard key={wine.id} wine={wine} />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
@@ -377,6 +423,18 @@ export default function FridgePage() {
           onComplete={fetchWines}
         />
       )}
+    </div>
+  );
+}
+
+function SectionHeader({ title, wines }: { title: string; wines: Wine[] }) {
+  const bottles = wines.reduce((s, w) => s + w.quantity, 0);
+  return (
+    <div className="flex items-baseline justify-between mb-2 px-0.5">
+      <h2 className="font-serif text-[17px] font-semibold text-text-primary">{title}</h2>
+      <span className="text-[11px] text-text-muted tabular-nums">
+        {bottles} bottle{bottles !== 1 ? "s" : ""}
+      </span>
     </div>
   );
 }
