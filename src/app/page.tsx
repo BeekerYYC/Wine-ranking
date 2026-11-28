@@ -24,6 +24,7 @@ interface Wine {
   tastingNotes?: string | null;
   criticReviews?: string | null;
   createdAt: string;
+  quantity?: number;
 }
 
 interface Stats {
@@ -80,10 +81,10 @@ export default function Home() {
   // section vanished entirely for a scan-only collection. That made a saved
   // bottle look lost in the one place you would go to confirm it.
   const recentlyAdded = wines.slice(0, 6);
-  const newThisWeek = wines.filter((w) => {
-    const d = new Date(w.createdAt).getTime();
-    return Date.now() - d < 7 * 24 * 60 * 60 * 1000;
-  }).length;
+  // Count bottles, not wine entries: one scanned wine with quantity 3 is 3 new bottles.
+  const newThisWeek = wines
+    .filter((w) => Date.now() - new Date(w.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000)
+    .reduce((sum, w) => sum + (w.quantity ?? 1), 0);
 
   // Build top regions/countries data
   const topCountries = stats?.countryBreakdown?.slice(0, 5) || [];
